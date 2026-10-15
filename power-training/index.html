@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <meta name="theme-color" content="#07151e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <base href="../">
+  <title>途中过分相+升降弓</title>
+  <link rel="stylesheet" href="./styles/power-training.css?rev=power-v1">
+</head>
+<body data-training-app="power-training">
+  <header class="topbar">
+    <div>
+      <h1>途中过分相+升降弓</h1>
+      <p>HXD1C · 手动过分相 · 后弓单弓 · 临时升降弓区段 · 仅考核模式</p>
+    </div>
+    <div class="header-actions">
+      <button id="reference-open" class="ghost" type="button">开关依据</button>
+      <span class="mode-badge">考核模式</span>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="workspace">
+      <div class="stage" id="stage">
+        <canvas id="route-scene" aria-label="分相区段与临时升降弓区段三维线路"></canvas>
+        <img class="cab-layer" src="./assets/archive-cabview/HXD1C_front.png" alt="HXD1C司机室驾驶台">
+        <div class="stage-hud">
+          <div><span>速度</span><b id="hud-speed">55.0</b><small>km/h</small></div>
+          <div><span>公里标</span><b id="hud-distance">1.250</b><small>km</small></div>
+          <div class="wide"><span>当前区段</span><b id="hud-zone">考核准备</b></div>
+        </div>
+        <div class="stage-actions">
+          <button id="callout-button" type="button"><b>呼唤确认</b><small>系统副司机应答</small></button>
+          <button id="switch-panel-open" type="button"><b>板钮柜</b><small>主断 / 受电弓 / 空压机</small></button>
+        </div>
+        <div class="traction-control" aria-label="牵引手柄">
+          <button id="traction-up" type="button" aria-label="牵引增加一级">＋</button>
+          <div><span>牵引手柄</span><b id="traction-value">2级</b></div>
+          <button id="traction-down" type="button" aria-label="牵引减少一级">－</button>
+        </div>
+        <div class="route-progress"><span id="route-progress"></span></div>
+      </div>
+      <div id="operation-message" class="operation-message" role="status" aria-live="polite">考核尚未开始。</div>
+      <div class="view-tabs" aria-label="司机室视角">
+        <button type="button" data-view="front" class="active">正面</button>
+        <button type="button" data-view="left">左侧</button>
+        <button type="button" data-view="right">右侧</button>
+      </div>
+    </section>
+
+    <aside class="assessment-panel">
+      <section class="panel score-panel">
+        <div class="panel-title"><h2>实时成绩</h2><span id="run-status">待开始</span></div>
+        <div class="score-total"><b id="score-total">0</b><span>/ 100</span></div>
+        <div class="scene-score"><span>手动过分相</span><b id="score-neutral">0 / 60</b></div>
+        <div class="scene-score"><span>升降弓处置</span><b id="score-panto">0 / 40</b></div>
+        <p id="score-note">安全关键错误将使对应场景记0分，但考核继续。</p>
+      </section>
+
+      <section class="panel state-panel">
+        <div class="panel-title"><h2>机车状态</h2></div>
+        <dl>
+          <div><dt>受电弓</dt><dd id="state-panto">后弓升</dd></div>
+          <div><dt>主断路器</dt><dd id="state-breaker">合</dd></div>
+          <div><dt>网压</dt><dd id="state-voltage">25 kV</dd></div>
+          <div><dt>牵引</dt><dd id="state-traction">2级</dd></div>
+          <div><dt>空压机</dt><dd id="state-compressor">自动</dd></div>
+          <div><dt>本局异物</dt><dd id="state-hazard">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel incident-panel">
+        <div class="panel-title"><h2>考核记录</h2><span id="incident-count">0项</span></div>
+        <ol id="incident-list"><li>尚无记录</li></ol>
+      </section>
+    </aside>
+  </main>
+
+  <div id="start-modal" class="modal open" role="dialog" aria-modal="true" aria-labelledby="start-title">
+    <section class="modal-card start-card">
+      <span class="eyebrow">独立考核项目</span>
+      <h2 id="start-title">途中过分相+升降弓</h2>
+      <p>初始状态为 55 km/h 稳定运行、后弓单弓、主断合、空压机自动。考核连续完成手动过分相和另一地点的接触网异物升降弓处置。</p>
+      <div class="brief-grid">
+        <div><b>60分</b><span>手动过分相</span></div>
+        <div><b>40分</b><span>升降弓处置</span></div>
+        <div><b>随机</b><span id="brief-hazard">本局异物</span></div>
+      </div>
+      <p class="safety-note">本项目仅用于教学仿真。考核里程为课堂压缩场景，不作为现场行车依据。</p>
+      <button id="start-button" class="primary" type="button">开始考核</button>
+    </section>
+  </div>
+
+  <div id="switch-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="switch-title">
+    <section class="modal-card switch-card">
+      <header><div><h2 id="switch-title">HXD1C板钮开关</h2><p>三位置保持式：操作后停留在目标位，不自动回0位。</p></div><button class="close" data-close="switch-modal" type="button">×</button></header>
+      <div class="switch-grid">
+        <article class="selector" data-selector="pantograph">
+          <h3>受电弓开关</h3>
+          <div class="lever-track"><i></i></div>
+          <div class="selector-buttons">
+            <button type="button" data-command="panto" data-value="up">升</button>
+            <button type="button" data-command="panto" data-value="zero">0</button>
+            <button type="button" data-command="panto" data-value="down">降</button>
+          </div>
+          <output id="switch-panto-value">升</output>
+        </article>
+        <article class="selector" data-selector="breaker">
+          <h3>主断路器开关</h3>
+          <div class="lever-track"><i></i></div>
+          <div class="selector-buttons">
+            <button type="button" data-command="breaker" data-value="close">合</button>
+            <button type="button" data-command="breaker" data-value="zero">0</button>
+            <button type="button" data-command="breaker" data-value="open">分</button>
+          </div>
+          <output id="switch-breaker-value">合</output>
+        </article>
+        <article class="selector" data-selector="compressor">
+          <h3>空压机开关</h3>
+          <div class="lever-track"><i></i></div>
+          <div class="selector-buttons">
+            <button type="button" data-command="compressor" data-value="force">强泵</button>
+            <button type="button" data-command="compressor" data-value="auto">自动</button>
+            <button type="button" data-command="compressor" data-value="off">停止</button>
+          </div>
+          <output id="switch-compressor-value">自动</output>
+        </article>
+      </div>
+      <div class="switch-footer"><span>当前受电弓：<b id="actual-panto">后弓升</b></span><span>当前主断：<b id="actual-breaker">合</b></span><span>当前网压：<b id="actual-voltage">25 kV</b></span></div>
+    </section>
+  </div>
+
+  <div id="reference-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="reference-title">
+    <section class="modal-card reference-card">
+      <header><div><h2 id="reference-title">开关实现依据</h2><p>原游戏驾驶台表现与实车板钮照片并列核对。</p></div><button class="close" data-close="reference-modal" type="button">×</button></header>
+      <div class="reference-grid">
+        <figure><img src="./assets/archive-cabview/HXD1C_game_baseline.png" alt="原游戏HXD1C驾驶台截图"><figcaption>原游戏驾驶台：该区域没有可操作的主断、受电弓和空压机三位置板钮。</figcaption></figure>
+        <figure><img src="./assets/switch-panel/HXD1C-switch-panel-reference.jpg" alt="HXD1C实车板钮面板参考照片"><figcaption>实车板钮参考：新项目按“受电弓 升/0/降、主断 合/0/分、空压机 强泵/自动/停止”实现。</figcaption></figure>
+      </div>
+    </section>
+  </div>
+
+  <div id="result-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
+    <section class="modal-card result-card">
+      <span class="eyebrow">考核结束</span>
+      <h2 id="result-title">成绩单</h2>
+      <div class="result-score"><b id="result-score">0</b><span>分</span></div>
+      <div id="result-scenes" class="result-scenes"></div>
+      <details><summary>查看评分明细与操作时间线</summary><div id="result-detail"></div></details>
+      <div class="result-actions"><button id="restart-button" class="primary" type="button">重新考核</button></div>
+    </section>
+  </div>
+
+  <script type="module" src="./scripts/powerTrainingApp.js?rev=power-v1"></script>
+</body>
+</html>
+

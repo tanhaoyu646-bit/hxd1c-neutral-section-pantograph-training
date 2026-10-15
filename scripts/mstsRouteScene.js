@@ -41,7 +41,9 @@ export class MstsRouteScene {
     this.canvas = canvas;
     this.profile = options.profile || 'departure';
     this.isLookout = this.profile === 'lookout';
-    this.renderOptions = this.isLookout ? LOOKOUT_ROUTE_RENDER_OPTIONS : DEFAULT_ROUTE_RENDER_OPTIONS;
+    this.isPowerTraining = this.profile === 'power-training';
+    this.isCorridor = this.isLookout || this.isPowerTraining;
+    this.renderOptions = this.isCorridor ? LOOKOUT_ROUTE_RENDER_OPTIONS : DEFAULT_ROUTE_RENDER_OPTIONS;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     const coarse = matchMedia('(pointer: coarse)').matches;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, coarse ? 1.15 : 1.5));
@@ -115,9 +117,9 @@ export class MstsRouteScene {
       const requests = [
         fetch(SOURCE_PATH, { cache: 'no-store' }),
         fetch(ROUTE_PATH, { cache: 'no-store' }),
-        fetch(this.isLookout ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
+        fetch(this.isCorridor ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
       ];
-      if (this.isLookout) {
+      if (this.isCorridor) {
         requests.push(fetch(LOOKOUT_PREFAB_PATH, { cache: 'no-store' }));
         requests.push(fetch(LOOKOUT_REPAIR_ASSET_PATH, { cache: 'no-store' }));
       }
@@ -125,8 +127,8 @@ export class MstsRouteScene {
       if (!sceneResponse.ok) throw new Error(`路线场景加载失败：HTTP ${sceneResponse.status}`);
       if (!pathResponse.ok) throw new Error(`轨道中心线加载失败：HTTP ${pathResponse.status}`);
       if (!terrainResponse.ok) throw new Error(`原线路地形加载失败：HTTP ${terrainResponse.status}`);
-      if (this.isLookout && !prefabResponse?.ok) throw new Error(`原线路道口素材加载失败：HTTP ${prefabResponse?.status}`);
-      if (this.isLookout && !repairAssetResponse?.ok) throw new Error(`原游戏补充素材加载失败：HTTP ${repairAssetResponse?.status}`);
+      if (this.isCorridor && !prefabResponse?.ok) throw new Error(`原线路素材加载失败：HTTP ${prefabResponse?.status}`);
+      if (this.isCorridor && !repairAssetResponse?.ok) throw new Error(`原游戏补充素材加载失败：HTTP ${repairAssetResponse?.status}`);
       const [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all([
         sceneResponse.json(),
         pathResponse.json(),
@@ -140,7 +142,7 @@ export class MstsRouteScene {
         });
       }
       this.buildRoutePath(pathData, sceneData);
-      if (this.isLookout) {
+      if (this.isCorridor) {
         // 本务线钢轨在加载时已经覆盖完整 TrackDB 路径；远裁剪面也必须覆盖同一范围，
         // 不能再用旧版 3 km 视距把实际存在的三维钢轨截掉。
         this.camera.far = Math.max(50_000, Math.ceil(this.pathLength + 1_000));
@@ -152,7 +154,7 @@ export class MstsRouteScene {
       this.buildPassengerConsist(12);
       // 瞭望项目的本务主线在加载时一次性生成到 TrackDB 路径终点。
       // 课程仍在6 km结算，但不再因考核终点人为截断三维钢轨。
-      const renderedRouteDistance = this.isLookout
+      const renderedRouteDistance = this.isCorridor
         ? this.pathLength
         : Math.min(this.pathLength, LOOKOUT_TRAINING_CONFIG.finishDistance + 350);
       const railEvent = LOOKOUT_TRAINING_CONFIG.events.find((item) => item.visualKind === 'rail');
@@ -198,8 +200,8 @@ export class MstsRouteScene {
     const root = new THREE.Group();
     root.name = 'MSTS_SOURCE_TERRAIN';
     root.userData.sourceResolution = Number(data?.summary?.resolution) || 0;
-    root.userData.railwayCorridorLimited = this.isLookout;
-    const corridorIndex = this.isLookout ? this.buildTerrainCorridorIndex() : null;
+    root.userData.railwayCorridorLimited = this.isCorridor;
+    const corridorIndex = this.isCorridor ? this.buildTerrainCorridorIndex() : null;
     for (const tile of data?.tiles || []) {
       const resolution = Number(tile.resolution) || 0;
       if (resolution < 3 || tile.heights?.length !== resolution * resolution) continue;
@@ -373,10 +375,10 @@ export class MstsRouteScene {
   buildRoute(data) {
     const instancesByShape = new Map();
     data.instances.forEach((instance) => {
-      const projection = this.isLookout
+      const projection = this.isCorridor
         ? this.projectPointToPath(instance.position, LOOKOUT_TRAINING_CONFIG.finishDistance + 500)
         : null;
-      if (this.isLookout) {
+      if (this.isCorridor) {
         // 瞭望项目只保留0–6 km教学走廊及其周边可见场景，不把原线路
         // 数十公里的远程实例一起提交给渲染器。
         if (!projection

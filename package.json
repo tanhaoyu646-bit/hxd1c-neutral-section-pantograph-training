@@ -1,9 +1,11 @@
 {
-  "name": "hxd1c-running-lookout-training",
+  "name": "hxd1c-neutral-section-pantograph-training",
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check scripts/credentialScenario.js && node --check scripts/scenario.js && node --check scripts/routeTrainingProfile.js && node --check scripts/lookoutTrainingConfig.js && node --check scripts/lookoutAssessment.js && node --check scripts/curvePuzzleLogic.js && node --check scripts/curve-puzzle.js && node --check scripts/railAlignedPath.js && node --check scripts/dynamics.js && node --check scripts/procedure.js && node --check scripts/mstsRouteScene.js && node --check scripts/archive-2d-cabview-real-route.js && node --check tools/mobile-controls-smoke.mjs && node --check tools/lkj-mobile-smoke.mjs && node --check tools/lookout-browser-smoke.mjs && node --check tools/audit-lookout-corridor.mjs && node --check tools/capture-route-distances.mjs && node --check tools/generate-lookout-source-prefabs.mjs && node tools/test-training-scenarios.mjs && node tools/test-interface-assets.mjs && node tools/test-split-pages.mjs && node tools/test-continuity-assessment.mjs && node tools/test-lookout-assessment.mjs && node tools/test-route-extension.mjs"
+    "check": "node --check scripts/powerTrainingConfig.js && node --check scripts/powerTrainingAssessment.js && node --check scripts/powerTrainingSimulation.js && node --check scripts/powerTrainingScene.js && node --check scripts/powerTrainingApp.js && node --check scripts/mstsRouteScene.js && node tools/test-power-training.mjs",
+    "check:legacy": "node --check scripts/credentialScenario.js && node --check scripts/scenario.js && node --check scripts/routeTrainingProfile.js && node --check scripts/lookoutTrainingConfig.js && node --check scripts/lookoutAssessment.js && node --check scripts/curvePuzzleLogic.js && node --check scripts/curve-puzzle.js && node --check scripts/railAlignedPath.js && node --check scripts/dynamics.js && node --check scripts/procedure.js && node --check scripts/mstsRouteScene.js && node --check scripts/archive-2d-cabview-real-route.js && node tools/test-training-scenarios.mjs && node tools/test-interface-assets.mjs && node tools/test-split-pages.mjs && node tools/test-continuity-assessment.mjs && node tools/test-lookout-assessment.mjs && node tools/test-route-extension.mjs",
+    "check:browser": "node tools/power-training-browser-smoke.mjs"
   }
 }
 

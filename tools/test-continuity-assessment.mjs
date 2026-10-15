@@ -14,8 +14,8 @@ const curveHtml = await readFile(new URL('../index.html', import.meta.url), 'utf
 const curveSource = await readFile(new URL('../scripts/curve-puzzle.js', import.meta.url), 'utf8');
 const continuityHtml = await readFile(new URL('../continuity-test/index.html', import.meta.url), 'utf8');
 
-assert.match(curveHtml, /爱国站—敬业站/);
-assert.match(curveHtml, /speed_limit_red\.png/);
+assert.match(curveHtml, /途中过分相\+升降弓/);
+assert.match(curveHtml, /power-training/);
 assert.match(curveSource, /K222\+603出站信号机/);
 for (const signal of ['2328', '2316', '2302', '2288', '2274', 'K226+091']) assert.match(curveSource, new RegExp(signal.replace('+', '\\+')));
 assert.doesNotMatch(curveSource, /id:'爱国站'/);

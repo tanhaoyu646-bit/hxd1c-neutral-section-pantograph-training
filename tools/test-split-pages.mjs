@@ -5,12 +5,14 @@ import { SMOOTH_START_TERRAINS } from '../scripts/scenario.js';
 import { getProcedure, scoreRun } from '../scripts/procedure.js';
 
 const curveHtml = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const powerHtml = await readFile(new URL('../power-training/index.html', import.meta.url), 'utf8');
 const continuityHtml = await readFile(new URL('../continuity-test/index.html', import.meta.url), 'utf8');
 const lookoutHtml = await readFile(new URL('../lookout-training/index.html', import.meta.url), 'utf8');
 const smoothHtml = await readFile(new URL('../smooth-start/index.html', import.meta.url), 'utf8');
-assert.match(curveHtml, /HXD1C途中瞭望技巧虚拟仿真/);
-assert.match(curveHtml, /爱国站—敬业站/);
-assert.match(curveHtml, /进入途中瞭望考评/);
+assert.match(curveHtml, /途中过分相\+升降弓/);
+assert.match(curveHtml, /href="\.\/power-training\/"/);
+assert.match(powerHtml, /data-training-app="power-training"/);
+assert.match(powerHtml, /仅考核模式/);
 assert.match(lookoutHtml, /data-training-app="lookout"/);
 assert.match(lookoutHtml, /发车与贯通20分＋途中瞭望80分/);
 assert.match(lookoutHtml, /未停车则该异常场景0分/);
@@ -92,4 +94,4 @@ assessmentLocks.command('auto-brake', 0);
 assert.equal(assessmentLocks.command('traction', 1), true);
 assert.deepEqual(assessmentLocks.state.assessmentScoreLocks, [2, 3], '专项首次牵引只能锁定缺失的基准尾压与平道缓解确认');
 
-console.log('Split pages valid: the project entry points to /lookout-training/, the frozen continuity page remains isolated, and the existing supporting pages remain testable.');
+console.log('Split pages valid: the project entry points to /power-training/, and the frozen baseline supporting pages remain isolated and testable.');

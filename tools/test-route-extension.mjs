@@ -36,8 +36,8 @@ assert.match(routeSceneSource, /limitTerrainAtRailway/);
 assert.match(routeSceneSource, /LOOKOUT_ROUTE_RENDER_OPTIONS/);
 assert.match(
   routeSceneSource,
-  /renderedRouteDistance = this\.isLookout[\s\S]*?\? this\.pathLength/,
-  '瞭望项目的连续本务主线不得在6 km考核终点附近截断',
+  /renderedRouteDistance = this\.isCorridor[\s\S]*?\? this\.pathLength/,
+  '走廊型项目的连续本务主线不得在考核终点附近截断',
 );
 assert.match(routeSceneSource, /LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD/, '缺少主线远景钢轨可见LOD');
 assert.match(routeSceneSource, /nearFadeStart:\s*\{\s*value:\s*150\s*\}/, '远景LOD不得替代近景实体钢轨');
