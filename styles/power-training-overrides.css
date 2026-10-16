@@ -1,0 +1,49 @@
+body[data-training-app="power-training"] .callout-button{border-color:#f0c457;background:#66480de8;color:#fff0b0}
+body[data-training-app="power-training"] .coach-progress{display:none}
+
+/* 原实物照片式板钮面板只停靠在驾驶台下部，不再形成全屏遮罩。 */
+body[data-training-app="power-training"] .switch-panel-modal.power-switch-docked{
+  position:absolute;
+  inset:0;
+  z-index:16;
+  width:100%;
+  height:100%;
+  padding:0 0 .6%;
+  background:transparent;
+  backdrop-filter:none;
+  pointer-events:none;
+}
+body[data-training-app="power-training"] .switch-panel-modal.power-switch-docked.open{
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+}
+body[data-training-app="power-training"] .power-switch-docked .switch-panel-shell{
+  width:min(880px,70%);
+  max-height:43%;
+  border-color:#78d7fa;
+  border-radius:9px;
+  box-shadow:0 9px 34px #000d;
+  pointer-events:auto;
+}
+body[data-training-app="power-training"] .power-switch-docked .switch-panel-head{height:42px;padding:5px 8px 5px 12px}
+body[data-training-app="power-training"] .power-switch-docked .switch-panel-head span{font-size:9px}
+body[data-training-app="power-training"] .power-switch-docked .switch-panel-photo{aspect-ratio:3.72/1}
+body[data-training-app="power-training"] .power-switch-docked .switch-panel-status{padding:5px 10px;font-size:10px}
+body[data-training-app="power-training"] .power-switch-docked .switch-unit.state-mid .switch-lever{top:47%;transform:perspective(120px) rotateX(0);filter:brightness(1)}
+body[data-training-app="power-training"] .power-switch-docked .switch-name{font-size:clamp(8px,1vw,12px)}
+
+@media(max-width:900px), (max-height:620px){
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-shell{width:min(760px,68%);max-height:50%}
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-head{height:32px}
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-head span{display:none}
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-close{width:32px;height:27px;font-size:18px}
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-status{padding:3px 8px;font-size:8px}
+  body[data-training-app="power-training"] .power-switch-docked .switch-name{font-size:7px}
+  body[data-training-app="power-training"] .power-switch-docked .switch-value{font-size:8px}
+}
+
+@media(orientation:landscape) and (max-height:620px){
+  body[data-training-app="power-training"].mobile-controls-enabled .metrics-toggle{display:block}
+  body[data-training-app="power-training"] .power-switch-docked .switch-panel-shell{width:min(720px,64%);max-height:54%}
+}

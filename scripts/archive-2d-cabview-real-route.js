@@ -6,10 +6,14 @@ import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './cred
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
+import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js';
+import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js';
+import { PowerTrainingScene } from './powerTrainingScene.js';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();
-const TRAINING_APP = ['smooth','continuity','lookout'].includes(document.body.dataset.trainingApp) ? document.body.dataset.trainingApp : 'departure';
+const TRAINING_APP = ['smooth','continuity','lookout','power-training'].includes(document.body.dataset.trainingApp) ? document.body.dataset.trainingApp : 'departure';
+const IS_POWER_APP = TRAINING_APP === 'power-training';
 const IS_CONTINUITY_APP = TRAINING_APP === 'continuity' || TRAINING_APP === 'lookout';
 const activeFirstBlockEndDistance = (state) => state.trainingScope === 'lookout'
   ? LOOKOUT_TRAINING_CONFIG.continuityEndDistance
@@ -35,10 +39,57 @@ if (TRAINING_APP === 'lookout') {
   sim.state.terrainSelected=true;
   sim.applySmoothStartPreset();
 }
+if (IS_POWER_APP) {
+  sim.state.trainingMode='assessment';
+  sim.state.trainingScope='power-training';
+  sim.state.scenarioId='normal';
+  sim.state.scenarioSelected=true;
+  sim.state.terrainMode='level';
+  sim.state.terrainSelected=true;
+  sim.applySmoothStartPreset();
+  Object.assign(sim.state, {
+    parkingBrake:false,
+    autoBrake:0,
+    independentBrake:0,
+    panto:true,
+    rearPantograph:true,
+    frontPantograph:false,
+    pantographSwitch:'up',
+    mainBreaker:true,
+    mainBreakerSwitch:'close',
+    compressor:true,
+    compressorSwitch:'auto',
+    compressorRunning:true,
+    netVoltage:25,
+    lineVoltage:true,
+    mainRes:850,
+    equalizingRes:600,
+    trainPipe:600,
+    tailPipe:598,
+    brakeCyl:0,
+    direction:'F',
+    speed:POWER_TRAINING_CONFIG.initialSpeed,
+    distance:POWER_TRAINING_CONFIG.startDistance,
+    traction:2,
+    actualTraction:2,
+    wholeTrainStartFraction:1,
+    wholeTrainStarted:true,
+    releasePropagation:1,
+    lkjStartAttempted:true,
+    lkjStartCorrect:true,
+    lkjStartDistance:POWER_TRAINING_CONFIG.startDistance,
+    completed:false,
+  });
+}
 const lookoutAssessment = TRAINING_APP === 'lookout' ? new LookoutAssessment(sim.state) : null;
+const powerAssessment = IS_POWER_APP ? new PowerTrainingAssessment(sim.state) : null;
+const powerHazard = IS_POWER_APP ? chooseHazard() : null;
+if(IS_POWER_APP)sim.state.hazard=powerHazard;
 const overlay = $('#overlay');
 const routeCanvas = $('#route-scene');
-const routeScene = new MstsRouteScene(routeCanvas, { profile: TRAINING_APP });
+const routeScene = IS_POWER_APP
+  ? new PowerTrainingScene(routeCanvas, { hazard: powerHazard })
+  : new MstsRouteScene(routeCanvas, { profile: TRAINING_APP });
 // 冷启动时首次 render 早于异步路线加载完成；ready 后必须重新同步画布与信号标注。
 routeCanvas.addEventListener('route-ready',()=>render(sim.state));
 routeCanvas.addEventListener('route-error',(event)=>{
@@ -56,7 +107,7 @@ const views = {
   rearRight: 'HXD1C_right.png',
 };
 const debugMode = new URLSearchParams(location.search).get('debug') === '1';
-if(debugMode){window.__trainingSim=sim;window.__routeScene=routeScene;window.__lookoutAssessment=lookoutAssessment;window.__trainingCommand=command;}
+if(debugMode){window.__trainingSim=sim;window.__routeScene=routeScene;window.__lookoutAssessment=lookoutAssessment;window.__powerAssessment=powerAssessment;window.__trainingCommand=command;}
 const keys = [['lkj','LKJ确认'],['panto','前受电弓'],['main-breaker','主断合'],['compressor','压缩机'],['parking','停放缓解'],['headlight','前照灯'],['horn','风笛'],['reset','警惕/复位']];
 let selectedView = 'front';
 let activeDrag = null;
@@ -98,15 +149,27 @@ const stationAudio = {
 };
 Object.values(stationAudio).forEach((audio)=>{audio.preload='auto';});
 const switchDefs = [
-  { id:'main-breaker', label:'主断路器', type:'short', x:15.6, read:s=>s.mainBreaker, on:'合', off:'分', directional:true, initialCheck:'mainBreaker' },
-  { id:'panto', label:'受电弓', type:'short', x:24.1, read:s=>s.panto, on:'升', off:'降', directional:true, initialCheck:'panto' },
-  { id:'compressor', label:'空压机', type:'long', x:32.5, read:s=>s.compressor, on:'投入', off:'停止', directional:true, initialCheck:'compressor' },
+  { id:'main-breaker', label:'主断路器', type:'short', x:15.6, read:s=>IS_POWER_APP?s.mainBreakerSwitch:s.mainBreaker, on:'合', off:'分', directional:true, positions:IS_POWER_APP?['close','zero','open']:null, positionLabels:{close:'合',zero:'0',open:'分'}, initialCheck:'mainBreaker' },
+  { id:'panto', label:'受电弓', type:'short', x:24.1, read:s=>IS_POWER_APP?s.pantographSwitch:s.panto, on:'升', off:'降', directional:true, positions:IS_POWER_APP?['up','zero','down']:null, positionLabels:{up:'升',zero:'0',down:'降'}, initialCheck:'panto' },
+  { id:'compressor', label:'空压机', type:'long', x:32.5, read:s=>IS_POWER_APP?s.compressorSwitch:s.compressor, on:'投入', off:'停止', directional:true, positions:IS_POWER_APP?['force','auto','off']:null, positionLabels:{force:'强泵',auto:'自动',off:'停止'}, initialCheck:'compressor' },
   { id:'headlight', label:'前照灯', type:'round', x:40.6, read:s=>s.headlight, on:'开', off:'关' },
   { id:'auxiliary-light', label:'辅照灯', type:'slider', x:51.8, read:s=>s.auxiliaryLight, on:'全', off:'0' },
   { id:'marker-front', label:'标志灯（前）', type:'short', x:63.0, read:s=>s.markerFront, states:['0','white','red'] },
   { id:'marker-rear', label:'标志灯（后）', type:'short', x:72.2, read:s=>s.markerRear, states:['0','white','red'] },
   { id:'cab-light', label:'司机室灯', type:'long', x:81.5, read:s=>s.cabLight, on:'开', off:'关' },
 ];
+function powerStageLabel(distance){
+  const {neutral:n,pantograph:p}=POWER_TRAINING_CONFIG;
+  if(distance<n.preview)return '驶向分相预告标';
+  if(distance<=n.restoreEnd)return '手动过分相';
+  if(distance<p.preview)return '区间恢复运行';
+  if(distance<=p.restoreEnd)return '临时升降弓与接触网异物处置';
+  return distance<POWER_TRAINING_CONFIG.finishDistance?'驶向考核终点':'考核完成';
+}
+function speakAssistant(message=''){
+  if(!message||!('speechSynthesis' in window))return;
+  speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message);utterance.lang='zh-CN';utterance.rate=.95;speechSynthesis.speak(utterance);
+}
 const pct = (value,total) => `${value / total * 100}%`;
 function frame(el, index, cols, rows) { const col = index % cols; const row = Math.floor(index / cols); el.style.backgroundPosition = `${cols === 1 ? 0 : col / (cols - 1) * 100}% ${rows === 1 ? 0 : row / (rows - 1) * 100}%`; }
 function makeSprite(id, image, x, y, w, h, cols, rows, label) { const el=document.createElement('div'); el.className=`sprite ${id}`; el.dataset.id=id; el.title=label; el.style.left=pct(x,640); el.style.top=pct(y,480); el.style.width=pct(w,640); el.style.height=pct(h,480); el.style.backgroundImage=`url("./assets/archive-cabview/${image}")`; el.style.backgroundSize=`${cols*100}% ${rows*100}%`; overlay.append(el); return el; }
@@ -201,7 +264,44 @@ function createFront() {
   directionZone.addEventListener('click',(event)=>{event.preventDefault();command('direction');});
   elements.traction.addEventListener('dblclick',(event)=>{event.preventDefault();command('traction',0);});
 }
-function command(id,value) { const s=sim.state; if(id==='direction'&&value===undefined) value=s.direction==='N'?'F':s.direction==='F'?'R':'N'; const accepted=sim.command(id,value);if(accepted!==false&&lookoutAssessment){const assessmentId=id==='auto-brake'?'auto':id==='independent-brake'?'independent':id;const message=lookoutAssessment.recordCommand(assessmentId,value,sim.state);if(message)sim.emit(message);}return accepted; }
+function syncPowerStateAliases(state){
+  if(!IS_POWER_APP)return;
+  state.rearPantograph=Boolean(state.panto);
+  state.frontPantograph=false;
+  state.compressorRunning=Boolean(state.compressor);
+  state.lineVoltage=state.netVoltage>=19;
+}
+function command(id,value) {
+  const s=sim.state;
+  if(id==='direction'&&value===undefined)value=s.direction==='N'?'F':s.direction==='F'?'R':'N';
+  let simulationValue=value;
+  let assessmentAction=id;
+  let assessmentValue=value;
+  if(IS_POWER_APP&&id==='main-breaker'&&typeof value==='string'){
+    s.mainBreakerSwitch=value;
+    if(value==='zero'){sim.emit('主断路器开关置0位；主断实际状态保持不变。');return true;}
+    simulationValue=value==='close';assessmentValue=value;
+  }
+  if(IS_POWER_APP&&id==='panto'&&typeof value==='string'){
+    s.pantographSwitch=value;
+    if(value==='zero'){sim.emit('受电弓开关置0位；受电弓实际状态保持不变。');return true;}
+    simulationValue=value==='up';assessmentAction='rear-pantograph';assessmentValue=value;
+  }
+  if(IS_POWER_APP&&id==='compressor'&&typeof value==='string'){
+    s.compressorSwitch=value;
+    simulationValue=value!=='off';assessmentValue=value;
+  }
+  const accepted=sim.command(id,simulationValue);
+  syncPowerStateAliases(sim.state);
+  if(accepted!==false&&lookoutAssessment){const assessmentId=id==='auto-brake'?'auto':id==='independent-brake'?'independent':id;const message=lookoutAssessment.recordCommand(assessmentId,value,sim.state);if(message)sim.emit(message);}
+  if(accepted!==false&&powerAssessment){
+    if(id==='traction'||id==='main-breaker'||assessmentAction==='rear-pantograph'){
+      const message=powerAssessment.recordAction(assessmentAction,assessmentValue,sim.state);if(message)sim.emit(message);
+    }
+    if(id==='compressor')sim.emit(`空压机开关置${value==='force'?'强泵':value==='auto'?'自动':'停止'}位；本项不计核心分。`);
+  }
+  return accepted;
+}
 function buildPowerCabinet(){
   const root=document.createElement('div');root.className='device-modal power-cabinet-modal';root.setAttribute('aria-hidden','true');
   root.innerHTML=`<div class="device-shell power-cabinet-shell" role="dialog" aria-modal="true" aria-label="HXD1C控制电源柜"><div class="device-head"><div><strong>HXD1C 控制电源柜</strong><span>按发车准备要求依次接通三项电源</span></div><button type="button" class="device-close" aria-label="关闭">×</button></div><div class="cabinet-face"><div class="cabinet-meter"><span>控制电压</span><b data-cabinet-voltage>0 V</b></div><div class="cabinet-lamps"><i data-lamp="110"></i><span>110V</span><i data-lamp="24"></i><span>24V</span></div><div class="cabinet-switches"></div><p class="cabinet-note">三项均接通后，司机室控制电源才建立。任何一项断开，主断与空压机均退出。</p></div></div>`;
@@ -676,6 +776,11 @@ function openDeliveredCredential(){
 }
 function buildTrainingControls(){
   const root=$('#training-controls');if(!root)return;
+  if(IS_POWER_APP){
+    root.innerHTML=`<div class="continuity-summary"><b>固定考评线路 · 总分100分</b><br>手动过分相60分，临时升降弓与接触网异物处置40分。安全关键错误使对应场景记0分，但考核继续。<br><br>本次随机异物：<b>${sim.state.hazard?.label||'待生成'}</b><br>后弓单弓；空压机保持自动位；主断、受电弓开关动作后不自动回0位。</div><button type="button" class="continuity-reset" data-continuity-reset>重新开始本次考评</button><p class="training-state" data-training-state>当前：考评模式 · 55 km/h区间运行</p>`;
+    root.querySelector('[data-continuity-reset]').addEventListener('click',()=>location.reload());
+    return;
+  }
   if(TRAINING_APP==='lookout'){
     root.innerHTML='<div class="continuity-summary"><b>固定考评线路 · 总分100分</b><br>站内平稳发车4分、贯通试验16分、正常道口10分；隧道异常20分、钢轨反光中断20分、侵限道口30分。三类异常均考核紧急处置和停车后坡道起车；未在危险点前停车则该场景0分。</div><button type="button" class="continuity-reset" data-continuity-reset>重新开始本次考评</button><p class="training-state" data-training-state>当前：考评模式 · 站内平稳发车</p>';
     root.querySelector('[data-continuity-reset]').addEventListener('click',()=>location.reload());
@@ -710,6 +815,11 @@ function focusInitialCheck(key){
 }
 function syncTrainingControls(state){
   const root=$('#training-controls');if(!root)return;
+  if(IS_POWER_APP){
+    const status=root.querySelector('[data-training-state]');
+    if(status)status.textContent=`当前：考评模式 · ${powerStageLabel(state.distance)} · ${state.assessment?.finished?'已结算':'进行中'}`;
+    return;
+  }
   if(TRAINING_APP==='lookout'){
     const active=lookoutAssessment?.current(state)?.config;
     const stage=!state.continuityStageCompleted?'站内发车与贯通试验':active?.label||(!state.lookout?.finished?'区间运行':'已结算');
@@ -734,19 +844,30 @@ function syncTrainingControls(state){
 }
 function buildResultReport(){
   const root=document.createElement('div');root.className='device-modal result-modal';root.setAttribute('aria-hidden','true');
-  const title=TRAINING_APP==='lookout'?'K2026次途中瞭望技巧虚拟仿真成绩单':TRAINING_APP==='continuity'?'K2026次平稳起车与贯通试验成绩单':'K2026次平稳起动考评成绩单';
+  const title=IS_POWER_APP?'途中过分相+升降弓考核成绩单':TRAINING_APP==='lookout'?'K2026次途中瞭望技巧虚拟仿真成绩单':TRAINING_APP==='continuity'?'K2026次平稳起车与贯通试验成绩单':'K2026次平稳起动考评成绩单';
   root.innerHTML=`<div class="device-shell result-shell" role="dialog" aria-modal="true" aria-label="${title}"><div class="device-head"><div><strong>${title}</strong><span>课堂训练结果，不作为实际作业记录</span></div><button type="button" class="device-close" aria-label="关闭成绩单">×</button></div><div class="result-body"><div class="result-score"><b data-result-score>0</b><span>分</span></div><p data-result-summary></p><ol data-result-items></ol><button type="button" class="result-close">完成查看</button></div></div>`;
   const close=()=>{root.classList.remove('open');root.setAttribute('aria-hidden','true');document.body.classList.remove('device-panel-active');};root.querySelector('.device-close').addEventListener('click',close);root.querySelector('.result-close').addEventListener('click',close);root.addEventListener('click',(event)=>{if(event.target===root)close();});document.body.append(root);resultRoot=root;
 }
 function showResultReport(state){
-  if(state.trainingMode!=='assessment'||resultShown)return;if(!resultRoot)buildResultReport();const score=scoreRun(state);const p=procedureState(state);
+  if(state.trainingMode!=='assessment'||resultShown)return;if(!resultRoot)buildResultReport();
+  if(IS_POWER_APP){
+    const score=powerSceneScores(state.assessment);const incidents=state.assessment.incidents||[];
+    resultRoot.querySelector('[data-result-score]').textContent=score.total;
+    resultRoot.querySelector('[data-result-summary]').textContent=`手动过分相 ${score.neutral}/60分，升降弓与异物处置 ${score.pantograph}/40分${incidents.length?`；安全关键错误 ${incidents.length} 项`:'；无安全关键错误'}。`;
+    resultRoot.querySelector('[data-result-items]').innerHTML=[...POWER_SCORING.neutral,...POWER_SCORING.pantograph].map((item)=>`<li class="${state.assessment.checks[item.id]?'pass':'fail'}"><span>${item.label}</span><b>${state.assessment.checks[item.id]?item.points:0}/${item.points}</b></li>`).join('');
+    resultRoot.classList.add('open');resultRoot.setAttribute('aria-hidden','false');document.body.classList.add('device-panel-active');resultShown=true;return;
+  }
+  const score=scoreRun(state);const p=procedureState(state);
   resultRoot.querySelector('[data-result-score]').textContent=score.score;resultRoot.querySelector('[data-result-summary]').textContent=`完成 ${score.completed}/${getProcedure(state).length} 个作业项点${score.deductions?`，操作扣分 ${score.deductions} 分`:'，无操作扣分'}。`;
   resultRoot.querySelector('[data-result-items]').innerHTML=score.itemScores.map((item)=>`<li class="${item.correct?'pass':'fail'}"><span>${item.label}${item.locked?'（动车时未完成，已锁定失分）':item.earned>0&&!item.correct?'（部分完成）':item.complete&&!item.correct?'（操作或核对错误）':''}</span><b>${item.earned}/${item.weight}</b></li>`).join('');resultRoot.classList.add('open');resultRoot.setAttribute('aria-hidden','false');document.body.classList.add('device-panel-active');resultShown=true;
 }
 function closeDevicePanels(){closeSwitchPanel();closePowerCabinet();closeLkj();closeSignalInspection();closeCredentialModal();closeCir();stopSideRelease();if(hornPointerId!==null)stopHorn();else{hornAudio.pause();hornAudio.currentTime=0;if(sim.state.hornActive)command('horn-stop');}}
 function buildSwitchPanel(){
   const root=document.createElement('div');root.id='switch-panel-modal';root.className='switch-panel-modal';root.setAttribute('aria-hidden','true');
-  root.innerHTML=`<div class="switch-panel-shell" role="dialog" aria-modal="true" aria-label="HXD1C板钮面板"><div class="switch-panel-head"><div><strong>板钮面板</strong><span>点击上半区或下半区拨动，板钮保持在所选位置</span></div><button type="button" class="switch-panel-close" aria-label="关闭板钮面板">×</button></div><div class="switch-panel-photo"><img src="./assets/switch-panel/HXD1C-switch-panel-reference.jpg" alt="HXD1C板钮面板实物参考" /><div class="switch-panel-controls"></div></div><div class="switch-panel-status">主断：上合/下分；受电弓：上升/下降；空压机：上投入/下停止。</div></div>`;
+  if(IS_POWER_APP)root.classList.add('power-switch-docked');
+  const help=IS_POWER_APP?'上／中／下三位置直接点击；板钮保持在所选位置，不自动回0位':'点击上半区或下半区拨动，板钮保持在所选位置';
+  const status=IS_POWER_APP?'主断：合/0/分；受电弓：升/0/降；空压机：强泵/自动/停止。':'主断：上合/下分；受电弓：上升/下降；空压机：上投入/下停止。';
+  root.innerHTML=`<div class="switch-panel-shell" role="dialog" aria-modal="${IS_POWER_APP?'false':'true'}" aria-label="HXD1C板钮面板"><div class="switch-panel-head"><div><strong>板钮面板</strong><span>${help}</span></div><button type="button" class="switch-panel-close" aria-label="关闭板钮面板">×</button></div><div class="switch-panel-photo"><img src="./assets/switch-panel/HXD1C-switch-panel-reference.jpg" alt="HXD1C板钮面板实物参考" /><div class="switch-panel-controls"></div></div><div class="switch-panel-status">${status}</div></div>`;
   const controls=root.querySelector('.switch-panel-controls');
   for(const def of switchDefs){
     const button=document.createElement('button');button.type='button';button.className=`switch-unit type-${def.type}`;button.dataset.switchId=def.id;button.style.setProperty('--switch-x',def.x);button.setAttribute('aria-label',def.label);
@@ -755,20 +876,21 @@ function buildSwitchPanel(){
   }
   root.querySelector('.switch-panel-close').addEventListener('click',closeSwitchPanel);
   root.addEventListener('click',(event)=>{if(event.target===root)closeSwitchPanel();});
-  document.body.append(root);switchPanelRoot=root;syncSwitchPanel(sim.state);
+  (IS_POWER_APP?$('#stage'):document.body).append(root);switchPanelRoot=root;syncSwitchPanel(sim.state);
 }
 function setSwitchPanelMessage(message=''){
   if(!switchPanelRoot)return;const status=switchPanelRoot.querySelector('.switch-panel-status');if(!status)return;
-  const normal='主断：上合/下分；受电弓：上升/下降；空压机：上投入/下停止。';
+  const normal=IS_POWER_APP?'主断：合/0/分；受电弓：升/0/降；空压机：强泵/自动/停止。':'主断：上合/下分；受电弓：上升/下降；空压机：上投入/下停止。';
   status.textContent=message||normal;status.classList.toggle('message',Boolean(message));clearTimeout(switchPanelMessageTimer);if(message)switchPanelMessageTimer=setTimeout(()=>{status.textContent=normal;status.classList.remove('message');},2600);
 }
-function openSwitchPanel(){if(selectedView!=='front')return;if(!switchPanelRoot)buildSwitchPanel();switchPanelRoot.classList.add('open');switchPanelRoot.setAttribute('aria-hidden','false');document.body.classList.add('switch-panel-active');syncSwitchPanel(sim.state);}
+function openSwitchPanel(){if(selectedView!=='front')return;if(!switchPanelRoot)buildSwitchPanel();switchPanelRoot.classList.add('open');switchPanelRoot.setAttribute('aria-hidden','false');if(!IS_POWER_APP)document.body.classList.add('switch-panel-active');syncSwitchPanel(sim.state);}
 function closeSwitchPanel(){if(!switchPanelRoot)return;switchPanelRoot.classList.remove('open');switchPanelRoot.setAttribute('aria-hidden','true');document.body.classList.remove('switch-panel-active');}
 function operateSwitch(def,button,event){
   const state=sim.state;const rect=button.getBoundingClientRect();const ratio=rect.height?((event?.clientY||rect.top+rect.height/2)-rect.top)/rect.height:.5;
   if(def.initialCheck&&!state.lkjConfirmed&&ratio>=.35&&ratio<=.65){command('initial-inspect',def.initialCheck);syncSwitchPanel(sim.state);return;}
   let targetUp=true;let accepted=true;
-  if(def.states){const current=def.read(state);const next=def.states[(def.states.indexOf(current)+1)%def.states.length];targetUp=next==='white';accepted=command(def.id,next);}
+  if(def.positions){const index=ratio<1/3?0:ratio<2/3?1:2;const next=def.positions[index];targetUp=index===0;accepted=command(def.id,next);}
+  else if(def.states){const current=def.read(state);const next=def.states[(def.states.indexOf(current)+1)%def.states.length];targetUp=next==='white';accepted=command(def.id,next);}
   else if(def.directional){targetUp=event?.clientY?event.clientY<rect.top+rect.height/2:!Boolean(def.read(state));accepted=command(def.id,targetUp);}
   else{targetUp=!Boolean(def.read(state));accepted=command(def.id,targetUp);}
   button.classList.remove('throw-up','throw-down','rejected');void button.offsetWidth;button.classList.add(targetUp?'throw-up':'throw-down');
@@ -778,7 +900,7 @@ function operateSwitch(def,button,event){
 }
 function syncSwitchPanel(state){
   if(!switchPanelRoot)return;
-  for(const def of switchDefs){const button=switchPanelRoot.querySelector(`[data-switch-id="${def.id}"]`);if(!button)continue;const value=def.read(state);button.classList.remove('state-up','state-mid','state-down');let label='0';if(def.states){label=value==='white'?'白':value==='red'?'红':'0';button.classList.add(value==='white'?'state-up':value==='red'?'state-down':'state-mid');}else{const on=Boolean(value);label=on?def.on:def.off;button.classList.add(on?'state-up':'state-down');}button.querySelector('.switch-value').textContent=label;button.setAttribute('aria-pressed',String(Boolean(value&&value!=='0')));}
+  for(const def of switchDefs){const button=switchPanelRoot.querySelector(`[data-switch-id="${def.id}"]`);if(!button)continue;const value=def.read(state);button.classList.remove('state-up','state-mid','state-down');let label='0';if(def.positions){const index=Math.max(0,def.positions.indexOf(value));label=def.positionLabels?.[value]||value;button.classList.add(index===0?'state-up':index===1?'state-mid':'state-down');}else if(def.states){label=value==='white'?'白':value==='red'?'红':'0';button.classList.add(value==='white'?'state-up':value==='red'?'state-down':'state-mid');}else{const on=Boolean(value);label=on?def.on:def.off;button.classList.add(on?'state-up':'state-down');}button.querySelector('.switch-value').textContent=label;button.setAttribute('aria-pressed',String(Boolean(value&&value!=='0'&&value!=='zero')));}
 }
 function bindDrag() {
   addEventListener('pointermove',(event)=>{
@@ -872,6 +994,16 @@ function render(state,message='') {
     const now=performance.now();if(now-lkjLastDynamicRender>500){lkjLastDynamicRender=now;renderLkj();}
   }
   renderSignalInspection(state);renderCredentialModal(state);renderCirWorkflow();syncTrainingControls(state);
+  if(IS_POWER_APP){
+    const assessment=state.assessment;const score=powerSceneScores(assessment);const items=[...POWER_SCORING.neutral,...POWER_SCORING.pantograph];
+    const completed=items.filter((item)=>assessment.checks[item.id]).length;
+    const procedureRoot=$('#procedure');const signature=items.map((item)=>`${item.id}:${assessment.checks[item.id]}`).join('|');
+    if(procedureRoot&&procedureRoot.dataset.signature!==signature){procedureRoot.dataset.signature=signature;procedureRoot.innerHTML=items.map((item,index)=>`<li class="${assessment.checks[item.id]?'done':index===items.findIndex((candidate)=>!assessment.checks[candidate.id])?'active':''}">${item.label}（${item.points}分）</li>`).join('');}
+    const remaining=Math.max(0,Math.round(POWER_TRAINING_CONFIG.finishDistance-state.distance));
+    $('#status').innerHTML=`<strong>状态：</strong>${assessment.finished?'考评已结算':powerStageLabel(state.distance)}<br>后弓 ${state.panto?'升':'降'} · 主断 ${state.mainBreaker?'合':'分'} · 网压 ${state.netVoltage.toFixed(1)} kV<br>总风 ${state.mainRes.toFixed(0)} kPa · 列车管 ${state.trainPipe.toFixed(0)} kPa · 停放制动 ${state.parkingBrake?'施加':'缓解'}<br>速度 ${state.speed.toFixed(1)} km/h · 距终点 ${remaining} m<br>当前得分 ${score.total}（过分相${score.neutral}/60，升降弓${score.pantograph}/40）`;
+    const workflowProgress=$('[data-workflow-progress]');if(workflowProgress)workflowProgress.textContent=`${completed}/${items.length}`;
+    renderSmoothStartPanel(state);if(message)$('#hint').textContent=message;if(assessment.finished)showResultReport(state);return;
+  }
   const assessmentFinished=state.trainingMode==='assessment'&&state.completed;if(!assessmentFinished)resultShown=false;
   const p=procedureState(state);const procedure=getProcedure(state);const procedureRoot=$('#procedure');
   const procedureSignature=procedure.map(([n],i)=>`${n}:${p.complete[i]?'done':i===p.current?'active':'pending'}`).join('|');
@@ -896,6 +1028,29 @@ function render(state,message='') {
 function renderSmoothStartPanel(state){
   const startedCars=Math.min(state.consistCars||12,Math.round((state.wholeTrainStartFraction||0)*(state.consistCars||12)));
   const setText=(id,value)=>{const element=$(id);if(element)element.textContent=value;};
+  if(IS_POWER_APP){
+    const scores=powerSceneScores(state.assessment);const n=POWER_TRAINING_CONFIG.neutral;const p=POWER_TRAINING_CONFIG.pantograph;
+    setText('#metric-speed',`${state.speed.toFixed(1)} km/h`);
+    setText('#metric-traction',state.traction>0?`${state.traction.toFixed(1)}级`:state.traction<0?`电制动${Math.abs(state.traction).toFixed(1)}级`:'零位');
+    setText('#metric-start',`${Math.round(state.trainPipe)} kPa`);
+    setText('#metric-acceleration',`${state.netVoltage.toFixed(1)} kV`);
+    setText('#metric-jerk',`${state.mainBreaker?'合':'分'} / 后弓${state.panto?'升':'降'}`);
+    setText('#metric-context-label','当前考核区段');
+    setText('#metric-lkj',powerStageLabel(state.distance));
+    const guide=$('#smooth-guide');
+    if(guide){
+      const items=[
+        ['分相预告与T断',state.distance>n.restoreEnd||scores.neutral>0,'T断后、断标前分主断；越过合标5～20m内合主断'],
+        ['分相区断电惰行',state.assessment.checks['neutral-coast'],'牵引零位、主断分位通过分相起止位置'],
+        ['临时升降弓标与手信号',state.assessment.checks['panto-signal'],'呼唤确认由系统模拟副司机应答'],
+        ['接触网异物处置',state.assessment.checks['panto-coast'],`${state.hazard?.label||'随机异物'}：后弓降下、主断分位、惰行通过`],
+        ['越过升弓标恢复',state.assessment.checks['panto-restore'],'升后弓→确认网压→合主断→平稳恢复牵引'],
+      ];
+      const signature=JSON.stringify(items);if(guide.dataset.signature!==signature){guide.dataset.signature=signature;guide.innerHTML=items.map(([label,done,detail],index)=>`<li class="${done?'done':!done&&items.slice(0,index).every(([,ready])=>ready)?'active':''}"><b>${index+1}. ${label}</b><span>${detail}</span></li>`).join('');}
+    }
+    const coach=$('#coach-progress');if(coach)coach.parentElement.hidden=true;
+    return;
+  }
   if(isContinuityPhase(state)){
     const remaining=Math.max(0,Math.round(activeFirstBlockEndDistance(state)-state.distance));
     const phase=state.continuityTractionRestoredCorrectly?'完成':state.continuityReleaseAttempted?'恢复牵引':state.continuityLkjObserved?'缓解自阀':state.continuitySpeedDeclining?'退级并查看LKJ':state.continuityBrakeAttempted?'排风减速':state.continuityTailPressureCorrect?'等待60 km/h':'平稳起车';
@@ -1047,5 +1202,6 @@ window.visualViewport?.addEventListener('resize',()=>{syncMobileViewport();route
 window.visualViewport?.addEventListener('scroll',syncMobileViewport);
 addEventListener('pointerup',stopHorn,true);addEventListener('pointercancel',stopHorn,true);addEventListener('pointerup',stopSideRelease,true);addEventListener('pointercancel',stopSideRelease,true);addEventListener('blur',()=>{stopHorn();stopSideRelease();});addEventListener('pagehide',()=>{stopHorn();stopSideRelease();});document.addEventListener('visibilitychange',()=>{if(document.hidden){stopHorn();stopSideRelease();}});
 $('#stage').addEventListener('click',(event)=>{if(selectedView!=='front'||document.body.classList.contains('device-panel-active')||document.body.classList.contains('switch-panel-active'))return;if(routeScene.hitTestDepartureSignal(event.clientX,event.clientY))openSignalInspection();});
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{setMetricsPanel(false);setViewPanel(false);setView(b.dataset.view);}));buildSwitchPanel();buildLkj();buildTrainingControls();buildKeys();bindDrag();bindControlDrawers();bindMetricsPanel();bindViewPanel();setMetricsPanel(false);setViewPanel(false);setView('front');sim.onChange(render);let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);sim.tick(dt,selectedView);if(lookoutAssessment){const message=lookoutAssessment.update(sim.state);if(message)sim.emit(message);routeScene.updateLookoutTraining?.(sim.state.lookout,sim.state.distance);}updateCirPressure(dt);routeScene.render();last=now;requestAnimationFrame(loop)}requestAnimationFrame(loop);
+$('#callout-button')?.addEventListener('click',()=>{const message=powerAssessment?.recordAction('callout',true,sim.state)||'';if(message){sim.emit(message);speakAssistant(message);}});
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{setMetricsPanel(false);setViewPanel(false);setView(b.dataset.view);}));buildSwitchPanel();buildLkj();buildTrainingControls();buildKeys();bindDrag();bindControlDrawers();bindMetricsPanel();bindViewPanel();setMetricsPanel(false);setViewPanel(false);setView('front');sim.onChange(render);let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);if(IS_POWER_APP){if(!sim.state.assessment.finished){const inNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(inNeutral)sim.state.netVoltage=0;sim.tick(dt,selectedView);const nowInNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(nowInNeutral)sim.state.netVoltage=0;syncPowerStateAliases(sim.state);powerAssessment.update(sim.state);if(sim.state.assessment.finished&&!sim.state.completed){sim.state.completed=true;sim.emit('考核终点到达，成绩已封存。');}}}else sim.tick(dt,selectedView);if(lookoutAssessment){const message=lookoutAssessment.update(sim.state);if(message)sim.emit(message);routeScene.updateLookoutTraining?.(sim.state.lookout,sim.state.distance);}updateCirPressure(dt);routeScene.render();last=now;requestAnimationFrame(loop)}requestAnimationFrame(loop);
 
