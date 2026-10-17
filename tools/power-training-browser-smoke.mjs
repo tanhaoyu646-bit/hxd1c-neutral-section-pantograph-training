@@ -48,7 +48,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, dev
 await send('Page.navigate', { url });
 await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&document.querySelector('.sprite.traction')){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('完整驾驶台项目初始化超时'))}},100)})`, true);
 
-const summary = await evaluate(`(()=>{const names=[];window.__routeScene.routeRoot.traverse((object)=>{if(object.name)names.push(object.name)});const s=window.__trainingSim.state;return{
+const summary = await evaluate(`(()=>{const names=[];let reverseSourceSigns=0;window.__routeScene.routeRoot.traverse((object)=>{if(object.name)names.push(object.name);if(object.userData?.backAsset&&object.children.some((child)=>child.name.endsWith('_BACK')&&Math.abs(child.rotation.y-Math.PI)<.001))reverseSourceSigns+=1});const s=window.__trainingSim.state;return{
   title:document.title,app:document.body.dataset.trainingApp,mode:s.trainingMode,scope:s.trainingScope,
   speed:Math.round(s.speed),rearPantograph:s.rearPantograph,frontPantograph:s.frontPantograph,compressor:s.compressorSwitch,
   handles:['auto-brake','independent-brake','traction','direction'].every((name)=>document.querySelector('.sprite.'+name)),
@@ -56,7 +56,15 @@ const summary = await evaluate(`(()=>{const names=[];window.__routeScene.routeRo
   lkj:Boolean(document.querySelector('.lkj-trigger')),cir:Boolean(document.querySelector('.cir-hotspot')),
   parking:Boolean(document.querySelector('.parking-apply')&&document.querySelector('.parking-release')),
   pathLength:window.__routeScene.pathLength,
+  railLodSegments:names.filter((name)=>name.startsWith('MAINLINE_RAIL_VISIBILITY_')).length,
+  railTopLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_TOP_MATERIAL'),
+  railSideLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_SIDE_MATERIAL'),
+  railFadeRanges:window.__routeScene.railVisibilityMaterials.map((material)=>[material.uniforms.nearFadeStart.value,material.uniforms.nearFadeEnd.value]),
   powerSigns:names.filter((name)=>name.startsWith('POWER_SIGN_')).length,
+  sourceSignRoots:names.filter((name)=>name.startsWith('POWER_SIGN_')&&name.endsWith('_FRONT')).length,
+  reverseSourceSigns,
+  requiredSigns:['POWER_SIGN_NO_DOUBLE_PANTOGRAPH_1570.3','POWER_SIGN_POWER_OFF_1641.3','POWER_SIGN_POWER_ON_1728.5','POWER_SIGN_LOWER_PANTOGRAPH_3840','POWER_SIGN_RAISE_PANTOGRAPH_4120'].every((name)=>names.includes(name)),
+  neutralBoundaries:names.includes('POWER_NEUTRAL_SECTION_START')&&names.includes('POWER_NEUTRAL_SECTION_END'),
   powerRoot:names.includes('POWER_TRAINING_SCENERY'),handSignal:names.includes('POWER_ONSITE_HAND_SIGNAL_PERSON'),
   hazard:names.some((name)=>name.startsWith('POWER_HAZARD_')),
   overflowX:document.documentElement.scrollWidth>document.documentElement.clientWidth+1
@@ -75,7 +83,15 @@ assert.equal(summary.lkj, true);
 assert.equal(summary.cir, true);
 assert.equal(summary.parking, true);
 assert(summary.pathLength > 4350);
-assert.equal(summary.powerSigns, 6);
+assert.equal(summary.railLodSegments, 8);
+assert.equal(summary.railTopLayer, true);
+assert.equal(summary.railSideLayer, true);
+assert(summary.railFadeRanges.every(([start,end])=>start>=40&&start<=90&&end>=110&&end<=180));
+assert.equal(summary.powerSigns, 29);
+assert.equal(summary.sourceSignRoots, 9);
+assert.equal(summary.reverseSourceSigns, 9);
+assert.equal(summary.requiredSigns, true);
+assert.equal(summary.neutralBoundaries, true);
 assert.equal(summary.powerRoot, true);
 assert.equal(summary.handSignal, true);
 assert.equal(summary.hazard, true);

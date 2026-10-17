@@ -2,6 +2,28 @@ import * as THREE from '../lib/three/three.module.js';
 import { MstsRouteScene } from './mstsRouteScene.js';
 import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js';
 
+const POWER_SIGN_ASSET_URLS = Object.freeze({
+  duan: new URL('../assets/power-signs/duan.json', import.meta.url).href,
+  he: new URL('../assets/power-signs/he.json', import.meta.url).href,
+  'jinzhi-shuanggong': new URL('../assets/power-signs/jinzhi-shuanggong.json', import.meta.url).href,
+  'k-jinzhi-shuanggong': new URL('../assets/power-signs/k-jinzhi-shuanggong.json', import.meta.url).href,
+  jiang: new URL('../assets/power-signs/jiang.json', import.meta.url).href,
+  sheng: new URL('../assets/power-signs/sheng.json', import.meta.url).href,
+  'zhunbei-jianggong': new URL('../assets/power-signs/zhunbei-jianggong.json', import.meta.url).href,
+  'k-zhunbei-jianggong': new URL('../assets/power-signs/k-zhunbei-jianggong.json', import.meta.url).href,
+  'yugaobiao-1': new URL('../assets/power-signs/yugaobiao-1.json', import.meta.url).href,
+  'yugaobiao-2': new URL('../assets/power-signs/yugaobiao-2.json', import.meta.url).href,
+  'yugaobiao-3': new URL('../assets/power-signs/yugaobiao-3.json', import.meta.url).href,
+});
+
+async function loadPowerSignAssets() {
+  return Object.fromEntries(await Promise.all(Object.entries(POWER_SIGN_ASSET_URLS).map(async ([id, url]) => {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`原游戏线路标志加载失败：${id}（HTTP ${response.status}）`);
+    return [id, await response.json()];
+  })));
+}
+
 function canvasTexture(text, options = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -57,7 +79,53 @@ function makeBoard(frontText, backText = frontText, options = {}) {
   return root;
 }
 
-function makeInsulatorBoundary(label) {
+function makeDiamondBoard() {
+  const root = new THREE.Group();
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, 512, 512);
+  context.fillStyle = '#f4f4f2';
+  context.strokeStyle = '#111';
+  context.lineWidth = 22;
+  context.beginPath();
+  context.moveTo(256, 28);
+  context.lineTo(484, 256);
+  context.lineTo(256, 484);
+  context.lineTo(28, 256);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = '900 150px "Microsoft YaHei", sans-serif';
+  context.fillStyle = '#bd1420';
+  context.fillText('T', 198, 255);
+  context.fillStyle = '#111';
+  context.fillText('断', 322, 255);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const material = new THREE.MeshStandardMaterial({
+    map: texture,
+    transparent: true,
+    alphaTest: 0.08,
+    roughness: 0.82,
+    side: THREE.DoubleSide,
+  });
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.94), material);
+  board.position.y = 2.42;
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.032, 0.045, 2.12, 8),
+    new THREE.MeshStandardMaterial({ color: '#777d80', roughness: 0.72, metalness: 0.42 }),
+  );
+  pole.position.y = 1.02;
+  root.add(board, pole);
+  return root;
+}
+
+function makeInsulatorBoundary() {
   const root = new THREE.Group();
   const ceramic = new THREE.MeshStandardMaterial({ color: '#e9ece7', roughness: 0.42, metalness: 0.05 });
   const metal = new THREE.MeshStandardMaterial({ color: '#646d72', roughness: 0.32, metalness: 0.8 });
@@ -71,9 +139,6 @@ function makeInsulatorBoundary(label) {
     bead.position.set(0, 5.72, z);
     root.add(bead);
   }
-  const tag = makeBoard(label, label === '分相始' ? '分相终' : '分相始', { width: 1.15, height: 0.7, fontSize: 100 });
-  tag.position.x = 3.4;
-  root.add(tag);
   return root;
 }
 
@@ -153,7 +218,8 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.hazardType = options.hazard || POWER_TRAINING_CONFIG.hazardTypes[0];
     this.powerVisuals = {};
     const baseLoad = this.loadPromise;
-    this.loadPromise = baseLoad.then(() => {
+    this.loadPromise = Promise.all([baseLoad, loadPowerSignAssets()]).then(([, powerSignAssets]) => {
+      this.powerSignAssets = powerSignAssets;
       this.buildPowerTrainingScenery();
       this.canvas.dispatchEvent(new CustomEvent('power-scene-ready', { detail: { hazard: this.hazardType } }));
       return this;
@@ -168,25 +234,67 @@ export class PowerTrainingScene extends MstsRouteScene {
     return board;
   }
 
+  createSourcePowerSign(assetId, name) {
+    const asset = this.powerSignAssets?.[assetId];
+    if (!asset?.source?.fileName) throw new Error(`缺少原游戏线路标志：${assetId}`);
+    const fileName = asset.source.fileName;
+    return this.createSourceShapeObject({ shapes: { [fileName]: asset } }, fileName, name);
+  }
+
+  addSourceSign(frontAssetId, backAssetId, distance, lateral, id) {
+    const root = new THREE.Group();
+    root.name = `POWER_SIGN_${id}_${distance}`;
+    root.userData.source = 'JINGGUANG original MSTS shape';
+    root.userData.frontAsset = frontAssetId;
+    root.userData.backAsset = backAssetId;
+    const front = this.createSourcePowerSign(frontAssetId, `${root.name}_FRONT`);
+    const back = this.createSourcePowerSign(backAssetId, `${root.name}_BACK`);
+    front.position.z = -0.012;
+    back.position.z = 0.012;
+    back.rotation.y = Math.PI;
+    root.add(front, back);
+    this.placeLookoutObject3D(root, distance, lateral);
+    this.powerRoot.add(root);
+    return root;
+  }
+
+  addDiamondBoard(distance, lateral) {
+    const board = makeDiamondBoard();
+    board.name = `POWER_SIGN_T_BREAK_${distance}`;
+    board.userData.source = 'source-style supplement; no standalone T-break shape exists in JINGGUANG';
+    this.placeLookoutObject3D(board, distance, lateral);
+    this.powerRoot.add(board);
+    return board;
+  }
+
   buildPowerTrainingScenery() {
     const { neutral: n, pantograph: p } = POWER_TRAINING_CONFIG;
     this.powerRoot = new THREE.Group();
     this.powerRoot.name = 'POWER_TRAINING_SCENERY';
     this.routeRoot.add(this.powerRoot);
 
-    this.addBoard('分相\n预告', n.preview, 4.2, '分相\n预告', { fontSize: 94, lineHeight: 104 });
-    this.addBoard('T断', n.tBreak, 4.2, 'T断', { color: '#111', border: '#d11722', fontSize: 142 });
-    const startBoundary = makeInsulatorBoundary('分相始');
+    // 原游戏采用三、二、一道斜杠的预告牌，反方向牌面按相反接近顺序保留。
+    this.addSourceSign('yugaobiao-3', 'yugaobiao-1', n.preview - 100, 4.2, 'NEUTRAL_PREVIEW_3');
+    this.addSourceSign('yugaobiao-2', 'yugaobiao-2', n.preview - 50, 4.2, 'NEUTRAL_PREVIEW_2');
+    this.addSourceSign('yugaobiao-1', 'yugaobiao-3', n.preview, 4.2, 'NEUTRAL_PREVIEW_1');
+    this.addSourceSign('jinzhi-shuanggong', 'k-jinzhi-shuanggong', n.noDoublePantograph, 4.2, 'NO_DOUBLE_PANTOGRAPH');
+    this.addDiamondBoard(n.tBreak, 4.2);
+    this.addSourceSign('duan', 'he', n.breakSign, 4.2, 'POWER_OFF');
+    this.addSourceSign('he', 'duan', n.closeSign, 4.2, 'POWER_ON');
+
+    const startBoundary = makeInsulatorBoundary();
+    startBoundary.name = 'POWER_NEUTRAL_SECTION_START';
     this.placeLookoutObject3D(startBoundary, n.sectionStart);
     this.powerRoot.add(startBoundary);
-    const endBoundary = makeInsulatorBoundary('分相终');
+    const endBoundary = makeInsulatorBoundary();
+    endBoundary.name = 'POWER_NEUTRAL_SECTION_END';
     this.placeLookoutObject3D(endBoundary, n.sectionEnd);
     this.powerRoot.add(endBoundary);
 
     this.addBoard('临时\n升降弓', p.preview, 4.2, '临时\n升降弓', { color: '#a21219', border: '#a21219', fontSize: 84, lineHeight: 98 });
-    this.addBoard('准备\n降弓', p.prepare, 4.2, '准备\n升弓', { color: '#a21219', border: '#a21219', fontSize: 86, lineHeight: 100 });
-    this.addBoard('降', p.lowerSign, 4.2, '升', { color: '#a21219', border: '#a21219', fontSize: 174 });
-    this.addBoard('升', p.raiseSign, 4.2, '降', { color: '#a21219', border: '#a21219', fontSize: 174 });
+    this.addSourceSign('zhunbei-jianggong', 'k-zhunbei-jianggong', p.prepare, 4.2, 'PREPARE_LOWER_PANTOGRAPH');
+    this.addSourceSign('jiang', 'sheng', p.lowerSign, 4.2, 'LOWER_PANTOGRAPH');
+    this.addSourceSign('sheng', 'jiang', p.raiseSign, 4.2, 'RAISE_PANTOGRAPH');
 
     const person = makeSignalPerson();
     person.name = 'POWER_ONSITE_HAND_SIGNAL_PERSON';
