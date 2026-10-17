@@ -161,7 +161,7 @@ const switchDefs = [
 ];
 function powerStageLabel(distance){
   const {neutral:n,pantograph:p}=POWER_TRAINING_CONFIG;
-  if(distance<n.preview)return '驶向分相预告标';
+  if(distance<n.preview)return '驶向分相操作区';
   if(distance<=n.restoreEnd)return '手动过分相';
   if(distance<p.preview)return '区间恢复运行';
   if(distance<=p.restoreEnd)return '临时升降弓与接触网异物处置';
@@ -1042,7 +1042,7 @@ function renderSmoothStartPanel(state){
     const guide=$('#smooth-guide');
     if(guide){
       const items=[
-        ['分相预告与T断',state.distance>n.restoreEnd||scores.neutral>0,'T断后、断标前分主断；越过合标5～35m内合主断'],
+        ['分相前确认与T断',state.distance>n.restoreEnd||scores.neutral>0,'禁止双弓→T断→断→分相区→合；T断后、断标前分主断'],
         ['分相区断电惰行',state.assessment.checks['neutral-coast'],'牵引零位、主断分位通过分相起止位置'],
         ['临时升降弓标',state.assessment.checks['panto-signal'],'识别标志并呼唤，系统模拟副司机应答'],
         ['接触网异物处置',state.assessment.checks['panto-coast'],`${state.hazard?.label||'随机异物'}：后弓降下、主断分位、惰行通过`],

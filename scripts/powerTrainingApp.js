@@ -28,8 +28,8 @@ function closeModal(id) {
 
 function zoneLabel(distance) {
   const { neutral: n, pantograph: p } = POWER_TRAINING_CONFIG;
-  if (distance < n.preview) return '接近分相预告';
-  if (distance < n.tBreak) return '分相预告区';
+  if (distance < n.preview) return '接近分相操作区';
+  if (distance < n.tBreak) return '分相前确认区';
   if (distance < n.breakSign) return 'T断—断标操作区';
   if (distance < n.sectionStart) return '接近分相起点';
   if (distance <= n.sectionEnd) return '分相区';

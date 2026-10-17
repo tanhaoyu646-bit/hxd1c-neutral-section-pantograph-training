@@ -5,8 +5,7 @@ export const POWER_TRAINING_CONFIG = Object.freeze({
   initialSpeed: 55,
   finishDistance: 5000,
   neutral: Object.freeze({
-    previewMarkers: Object.freeze([1400, 1500, 1600]),
-    preview: 1600,
+    preview: 1500,
     noDoublePantograph: 1800,
     tBreak: 1950,
     breakSign: 2100,
@@ -37,7 +36,7 @@ export const POWER_TRAINING_CONFIG = Object.freeze({
 
 export const POWER_SCORING = Object.freeze({
   neutral: Object.freeze([
-    Object.freeze({ id: 'neutral-preview', label: '分相预告标识别与呼唤', points: 8 }),
+    Object.freeze({ id: 'neutral-preview', label: '分相前位置确认与呼唤', points: 8 }),
     Object.freeze({ id: 'rear-panto', label: '禁止双弓、后弓单弓确认', points: 6 }),
     Object.freeze({ id: 'neutral-traction-zero', label: '牵引手柄退零时机', points: 10 }),
     Object.freeze({ id: 'neutral-break-open', label: 'T断后、断标前分主断', points: 14 }),

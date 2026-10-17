@@ -103,7 +103,12 @@ function runLayoutTimingChecks() {
   const { neutral: n, pantograph: p, initialSpeed } = POWER_TRAINING_CONFIG;
   const metresPerSecond = initialSpeed / 3.6;
   const seconds = (distance) => distance / metresPerSecond;
-  assert(n.previewMarkers.every((distance, index, list) => index === 0 || distance - list[index - 1] >= 100));
+  assert(n.preview < n.noDoublePantograph);
+  assert(n.noDoublePantograph < n.tBreak);
+  assert(n.tBreak < n.breakSign);
+  assert(n.breakSign < n.sectionStart);
+  assert(n.sectionStart < n.sectionEnd);
+  assert(n.sectionEnd < n.closeSign);
   assert(seconds(n.tBreak - n.noDoublePantograph) >= 9);
   assert(seconds(n.breakSign - n.tBreak) >= 9);
   assert(seconds(n.sectionStart - n.breakSign) >= 6);

@@ -66,9 +66,9 @@ export class PowerTrainingAssessment {
     let message = '';
 
     if (action === 'callout') {
-      if (d >= N.previewMarkers[0] - 80 && d < N.noDoublePantograph - 80 && !a.checks['neutral-preview']) {
+      if (d >= N.preview - 100 && d < N.noDoublePantograph - 80 && !a.checks['neutral-preview']) {
         a.checks['neutral-preview'] = true;
-        message = '司机：分相预告，注意。副司机：注意。';
+        message = '司机：前方分相，注意。副司机：注意。';
       } else if (d >= N.noDoublePantograph - 55 && d < N.tBreak + 20 && !a.checks['rear-panto']) {
         a.checks['rear-panto'] = state.rearPantograph && !state.frontPantograph;
         message = a.checks['rear-panto']

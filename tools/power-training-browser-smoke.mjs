@@ -64,6 +64,9 @@ const summary = await evaluate(`(()=>{const names=[];let reverseSourceSigns=0;le
   sourceSignRoots:names.filter((name)=>name.startsWith('POWER_SIGN_')&&name.endsWith('_FRONT')).length,
   reverseSourceSigns,
   scaledSourceSigns,
+  incorrectPreviewSigns:names.some((name)=>name.startsWith('POWER_SIGN_NEUTRAL_PREVIEW_')),
+  tBreakFaces:['T_BREAK_FRONT','T_BREAK_BACK'].every((name)=>names.includes(name)),
+  sourceRouteClutter:window.__routeScene.routeRoot.children.filter((object)=>/^(?:duan|jinzhi-shuanggong|quxianbiao|qiaoliangbiao)\.s:/i.test(object.name)||/^SOURCE_(?:DWARF|ROUTE_SIGNAL)/.test(object.name)).map((object)=>object.name),
   requiredSigns:['POWER_SIGN_NO_DOUBLE_PANTOGRAPH_1800','POWER_SIGN_POWER_OFF_2100','POWER_SIGN_POWER_ON_2500','POWER_SIGN_LOWER_PANTOGRAPH_3800','POWER_SIGN_RAISE_PANTOGRAPH_4400'].every((name)=>names.includes(name)),
   neutralBoundaries:names.includes('POWER_NEUTRAL_SECTION_START')&&names.includes('POWER_NEUTRAL_SECTION_END'),
   powerRoot:names.includes('POWER_TRAINING_SCENERY'),onsitePerson:names.includes('POWER_ONSITE_HAND_SIGNAL_PERSON'),
@@ -89,10 +92,13 @@ assert.equal(summary.railLodSegments, 8);
 assert.equal(summary.railTopLayer, true);
 assert.equal(summary.railSideLayer, true);
 assert(summary.railFadeRanges.every(([start,end])=>start>=40&&start<=90&&end>=110&&end<=180));
-assert.equal(summary.powerSigns, 29);
-assert.equal(summary.sourceSignRoots, 9);
-assert.equal(summary.reverseSourceSigns, 9);
-assert.equal(summary.scaledSourceSigns, 9);
+assert.equal(summary.powerSigns, 20);
+assert.equal(summary.sourceSignRoots, 6);
+assert.equal(summary.reverseSourceSigns, 6);
+assert.equal(summary.scaledSourceSigns, 6);
+assert.equal(summary.incorrectPreviewSigns, false);
+assert.equal(summary.tBreakFaces, true);
+assert.deepEqual(summary.sourceRouteClutter, []);
 assert.equal(summary.requiredSigns, true);
 assert.equal(summary.neutralBoundaries, true);
 assert.equal(summary.powerRoot, true);

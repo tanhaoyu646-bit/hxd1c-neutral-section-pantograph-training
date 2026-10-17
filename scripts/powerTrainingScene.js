@@ -11,9 +11,6 @@ const POWER_SIGN_ASSET_URLS = Object.freeze({
   sheng: new URL('../assets/power-signs/sheng.json', import.meta.url).href,
   'zhunbei-jianggong': new URL('../assets/power-signs/zhunbei-jianggong.json', import.meta.url).href,
   'k-zhunbei-jianggong': new URL('../assets/power-signs/k-zhunbei-jianggong.json', import.meta.url).href,
-  'yugaobiao-1': new URL('../assets/power-signs/yugaobiao-1.json', import.meta.url).href,
-  'yugaobiao-2': new URL('../assets/power-signs/yugaobiao-2.json', import.meta.url).href,
-  'yugaobiao-3': new URL('../assets/power-signs/yugaobiao-3.json', import.meta.url).href,
 });
 
 async function loadPowerSignAssets() {
@@ -112,16 +109,22 @@ function makeDiamondBoard() {
     transparent: true,
     alphaTest: 0.08,
     roughness: 0.82,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   });
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.94), material);
-  board.position.y = 2.42;
+  const geometry = new THREE.PlaneGeometry(0.94, 0.94);
+  const front = new THREE.Mesh(geometry, material);
+  front.name = 'T_BREAK_FRONT';
+  front.position.set(0, 2.42, -0.012);
+  front.rotation.y = Math.PI;
+  const back = new THREE.Mesh(geometry, material.clone());
+  back.name = 'T_BREAK_BACK';
+  back.position.set(0, 2.42, 0.012);
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.032, 0.045, 2.12, 8),
     new THREE.MeshStandardMaterial({ color: '#777d80', roughness: 0.72, metalness: 0.42 }),
   );
   pole.position.y = 1.02;
-  root.add(board, pole);
+  root.add(front, back, pole);
   return root;
 }
 
@@ -201,8 +204,8 @@ export class PowerTrainingScene extends MstsRouteScene {
   addBoard(text, distance, lateral, backText = text, options = {}) {
     const board = makeBoard(text, backText, options);
     board.name = `POWER_SIGN_${text}_${distance}`;
-    board.scale.setScalar(1.4);
-    board.userData.displayScale = 1.4;
+    board.scale.setScalar(1.5);
+    board.userData.displayScale = 1.5;
     this.placeLookoutObject3D(board, distance, lateral);
     this.powerRoot.add(board);
     return board;
@@ -227,13 +230,9 @@ export class PowerTrainingScene extends MstsRouteScene {
     back.position.z = 0.012;
     back.rotation.y = Math.PI;
     root.add(front, back);
-    // 原游戏模型按实际线路比例制作，但在带驾驶台遮挡的网页视场中偏小。
-    // 竖排文字牌需要更大的横向补偿；菱形牌保持较小一级，避免轮廓失真。
-    const verticalPlate = /jinzhi|zhunbei|yugaobiao/i.test(frontAssetId);
-    const displayScale = verticalPlate
-      ? { x: 2.8, y: 1.6, z: 1.6 }
-      : { x: 1.9, y: 1.65, z: 1.65 };
-    root.scale.set(displayScale.x, displayScale.y, displayScale.z);
+    // 仅做等比例显示补偿，保留原游戏牌面的宽高关系和轮廓。
+    const displayScale = /jinzhi|zhunbei/i.test(frontAssetId) ? 2.05 : 1.95;
+    root.scale.setScalar(displayScale);
     root.userData.displayScale = displayScale;
     this.placeLookoutObject3D(root, distance, lateral);
     this.powerRoot.add(root);
@@ -244,8 +243,8 @@ export class PowerTrainingScene extends MstsRouteScene {
     const board = makeDiamondBoard();
     board.name = `POWER_SIGN_T_BREAK_${distance}`;
     board.userData.source = 'source-style supplement; no standalone T-break shape exists in JINGGUANG';
-    board.scale.setScalar(1.55);
-    board.userData.displayScale = 1.55;
+    board.scale.setScalar(1.65);
+    board.userData.displayScale = 1.65;
     this.placeLookoutObject3D(board, distance, lateral);
     this.powerRoot.add(board);
     return board;
@@ -256,15 +255,10 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.powerRoot = new THREE.Group();
     this.powerRoot.name = 'POWER_TRAINING_SCENERY';
     this.routeRoot.add(this.powerRoot);
-    // 3.6 m侧移会使标牌在接近到约10 m时被左窗柱遮挡；3.0 m仍留有
-    // 线路设备净空，同时能让司机在通过前完成最后一次辨认。
-    const signLateral = 3.0;
-    const [previewThree, previewTwo, previewOne] = n.previewMarkers;
+    // 按《技规》信号标志内侧距线路中心不小于3.1 m；取3.2 m兼顾净空与
+    // 驾驶室左窗柱遮挡。进站预告标不属于电分相标志，不在本场景放置。
+    const signLateral = 3.2;
 
-    // 原游戏采用三、二、一道斜杠的预告牌，反方向牌面按相反接近顺序保留。
-    this.addSourceSign('yugaobiao-3', 'yugaobiao-1', previewThree, signLateral, 'NEUTRAL_PREVIEW_3');
-    this.addSourceSign('yugaobiao-2', 'yugaobiao-2', previewTwo, signLateral, 'NEUTRAL_PREVIEW_2');
-    this.addSourceSign('yugaobiao-1', 'yugaobiao-3', previewOne, signLateral, 'NEUTRAL_PREVIEW_1');
     this.addSourceSign('jinzhi-shuanggong', 'k-jinzhi-shuanggong', n.noDoublePantograph, signLateral, 'NO_DOUBLE_PANTOGRAPH');
     this.addDiamondBoard(n.tBreak, signLateral);
     this.addSourceSign('duan', 'he', n.breakSign, signLateral, 'POWER_OFF');

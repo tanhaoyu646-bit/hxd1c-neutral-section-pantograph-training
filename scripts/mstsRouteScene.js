@@ -36,6 +36,10 @@ const LOOKOUT_ROUTE_RENDER_OPTIONS = Object.freeze({
   sourceDepartureSignal: true,
 });
 
+// 电分相考核使用独立、按教学里程布置的标志。原线路在同一走廊内还带有
+// 既有断电牌、禁止双弓牌、曲线牌和信号机，若同时渲染会造成重复和错序。
+const POWER_TRAINING_SUPPRESSED_SHAPES = /^(?:duan|jinzhi-shuanggong|quxianbiao|qiaoliangbiao)\.s$/i;
+
 export class MstsRouteScene {
   constructor(canvas, options = {}) {
     this.canvas = canvas;
@@ -161,8 +165,8 @@ export class MstsRouteScene {
       if (this.renderOptions.proceduralTrack) this.buildSelectedRouteTrack(renderedRouteDistance);
       if (this.renderOptions.railHighlights) this.buildRailHighlights(renderedRouteDistance, railEvent);
       if (this.renderOptions.continuousRailHeads) this.buildContinuousRailHeads(renderedRouteDistance);
-      if (this.renderOptions.sourceDepartureSignal) this.buildSourceDepartureSignal(sceneData);
-      this.buildSourceRouteSignalLights(sceneData);
+      if (this.renderOptions.sourceDepartureSignal && !this.isPowerTraining) this.buildSourceDepartureSignal(sceneData);
+      if (!this.isPowerTraining) this.buildSourceRouteSignalLights(sceneData);
       if (this.isLookout) this.buildLookoutTrainingScenery(sceneData, prefabData, repairAssetData);
       this.ready = true;
       this.applyCamera();
@@ -392,6 +396,13 @@ export class MstsRouteScene {
         // 教学隧道已自带轨道、洞壁和洞门，清除这一小段原露天线路上的
         // 接触网杆、信号和轨道，避免它们穿入隧道内部。
         if (insideTeachingTunnel) return;
+
+        // 本项目只显示与当前考核相关、由 powerTrainingScene 按正确顺序
+        // 放置的标志；保留原项目中的这些对象会叠出第二套错误序列。
+        if (this.isPowerTraining && (
+          instance.type === 'SignalObj'
+          || POWER_TRAINING_SUPPRESSED_SHAPES.test(instance.shape || '')
+        )) return;
 
         // 原接触网杆的对象原点位于原轨道中心，真正的杆柱约在局部 +X 3 m。
         // 主线中心线重建后，少数杆柱会侵入新线路。按实际杆柱位置做净空判断，
