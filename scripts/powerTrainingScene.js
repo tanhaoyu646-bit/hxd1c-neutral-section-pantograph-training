@@ -142,34 +142,6 @@ function makeInsulatorBoundary() {
   return root;
 }
 
-function makeSignalPerson() {
-  const root = new THREE.Group();
-  const uniform = new THREE.MeshStandardMaterial({ color: '#ffb11d', roughness: 0.75 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#202a32', roughness: 0.85 });
-  const skin = new THREE.MeshStandardMaterial({ color: '#e4b28b', roughness: 0.8 });
-  const red = new THREE.MeshStandardMaterial({ color: '#e21f2f', roughness: 0.72, side: THREE.DoubleSide });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.58, 1.05, 0.34), uniform);
-  body.position.y = 1.35;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), skin);
-  head.position.y = 2.08;
-  root.add(body, head);
-  for (const x of [-0.18, 0.18]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.92, 0.18), dark);
-    leg.position.set(x, 0.48, 0);
-    root.add(leg);
-  }
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.18, 0.16), uniform);
-  arm.position.set(-0.48, 1.65, 0);
-  arm.rotation.z = -0.92;
-  root.add(arm);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), red);
-  flag.position.set(-1.05, 2.22, 0);
-  flag.rotation.y = Math.PI / 2;
-  root.add(flag);
-  root.userData.flag = flag;
-  return root;
-}
-
 function makeHazard(type) {
   const root = new THREE.Group();
   root.name = `POWER_HAZARD_${type.id}`;
@@ -229,6 +201,8 @@ export class PowerTrainingScene extends MstsRouteScene {
   addBoard(text, distance, lateral, backText = text, options = {}) {
     const board = makeBoard(text, backText, options);
     board.name = `POWER_SIGN_${text}_${distance}`;
+    board.scale.setScalar(1.4);
+    board.userData.displayScale = 1.4;
     this.placeLookoutObject3D(board, distance, lateral);
     this.powerRoot.add(board);
     return board;
@@ -253,6 +227,14 @@ export class PowerTrainingScene extends MstsRouteScene {
     back.position.z = 0.012;
     back.rotation.y = Math.PI;
     root.add(front, back);
+    // 原游戏模型按实际线路比例制作，但在带驾驶台遮挡的网页视场中偏小。
+    // 竖排文字牌需要更大的横向补偿；菱形牌保持较小一级，避免轮廓失真。
+    const verticalPlate = /jinzhi|zhunbei|yugaobiao/i.test(frontAssetId);
+    const displayScale = verticalPlate
+      ? { x: 2.8, y: 1.6, z: 1.6 }
+      : { x: 1.9, y: 1.65, z: 1.65 };
+    root.scale.set(displayScale.x, displayScale.y, displayScale.z);
+    root.userData.displayScale = displayScale;
     this.placeLookoutObject3D(root, distance, lateral);
     this.powerRoot.add(root);
     return root;
@@ -262,6 +244,8 @@ export class PowerTrainingScene extends MstsRouteScene {
     const board = makeDiamondBoard();
     board.name = `POWER_SIGN_T_BREAK_${distance}`;
     board.userData.source = 'source-style supplement; no standalone T-break shape exists in JINGGUANG';
+    board.scale.setScalar(1.55);
+    board.userData.displayScale = 1.55;
     this.placeLookoutObject3D(board, distance, lateral);
     this.powerRoot.add(board);
     return board;
@@ -272,15 +256,19 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.powerRoot = new THREE.Group();
     this.powerRoot.name = 'POWER_TRAINING_SCENERY';
     this.routeRoot.add(this.powerRoot);
+    // 3.6 m侧移会使标牌在接近到约10 m时被左窗柱遮挡；3.0 m仍留有
+    // 线路设备净空，同时能让司机在通过前完成最后一次辨认。
+    const signLateral = 3.0;
+    const [previewThree, previewTwo, previewOne] = n.previewMarkers;
 
     // 原游戏采用三、二、一道斜杠的预告牌，反方向牌面按相反接近顺序保留。
-    this.addSourceSign('yugaobiao-3', 'yugaobiao-1', n.preview - 100, 4.2, 'NEUTRAL_PREVIEW_3');
-    this.addSourceSign('yugaobiao-2', 'yugaobiao-2', n.preview - 50, 4.2, 'NEUTRAL_PREVIEW_2');
-    this.addSourceSign('yugaobiao-1', 'yugaobiao-3', n.preview, 4.2, 'NEUTRAL_PREVIEW_1');
-    this.addSourceSign('jinzhi-shuanggong', 'k-jinzhi-shuanggong', n.noDoublePantograph, 4.2, 'NO_DOUBLE_PANTOGRAPH');
-    this.addDiamondBoard(n.tBreak, 4.2);
-    this.addSourceSign('duan', 'he', n.breakSign, 4.2, 'POWER_OFF');
-    this.addSourceSign('he', 'duan', n.closeSign, 4.2, 'POWER_ON');
+    this.addSourceSign('yugaobiao-3', 'yugaobiao-1', previewThree, signLateral, 'NEUTRAL_PREVIEW_3');
+    this.addSourceSign('yugaobiao-2', 'yugaobiao-2', previewTwo, signLateral, 'NEUTRAL_PREVIEW_2');
+    this.addSourceSign('yugaobiao-1', 'yugaobiao-3', previewOne, signLateral, 'NEUTRAL_PREVIEW_1');
+    this.addSourceSign('jinzhi-shuanggong', 'k-jinzhi-shuanggong', n.noDoublePantograph, signLateral, 'NO_DOUBLE_PANTOGRAPH');
+    this.addDiamondBoard(n.tBreak, signLateral);
+    this.addSourceSign('duan', 'he', n.breakSign, signLateral, 'POWER_OFF');
+    this.addSourceSign('he', 'duan', n.closeSign, signLateral, 'POWER_ON');
 
     const startBoundary = makeInsulatorBoundary();
     startBoundary.name = 'POWER_NEUTRAL_SECTION_START';
@@ -291,16 +279,10 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.placeLookoutObject3D(endBoundary, n.sectionEnd);
     this.powerRoot.add(endBoundary);
 
-    this.addBoard('临时\n升降弓', p.preview, 4.2, '临时\n升降弓', { color: '#a21219', border: '#a21219', fontSize: 84, lineHeight: 98 });
-    this.addSourceSign('zhunbei-jianggong', 'k-zhunbei-jianggong', p.prepare, 4.2, 'PREPARE_LOWER_PANTOGRAPH');
-    this.addSourceSign('jiang', 'sheng', p.lowerSign, 4.2, 'LOWER_PANTOGRAPH');
-    this.addSourceSign('sheng', 'jiang', p.raiseSign, 4.2, 'RAISE_PANTOGRAPH');
-
-    const person = makeSignalPerson();
-    person.name = 'POWER_ONSITE_HAND_SIGNAL_PERSON';
-    this.placeLookoutObject3D(person, p.handSignal, 4.4);
-    this.powerRoot.add(person);
-    this.powerVisuals.person = person;
+    this.addBoard('临时\n升降弓', p.preview, signLateral, '临时\n升降弓', { color: '#a21219', border: '#a21219', fontSize: 84, lineHeight: 98 });
+    this.addSourceSign('zhunbei-jianggong', 'k-zhunbei-jianggong', p.prepare, signLateral, 'PREPARE_LOWER_PANTOGRAPH');
+    this.addSourceSign('jiang', 'sheng', p.lowerSign, signLateral, 'LOWER_PANTOGRAPH');
+    this.addSourceSign('sheng', 'jiang', p.raiseSign, signLateral, 'RAISE_PANTOGRAPH');
 
     const hazard = makeHazard(this.hazardType);
     this.placeLookoutObject3D(hazard, p.hazardObject, 0.35);
@@ -333,8 +315,6 @@ export class PowerTrainingScene extends MstsRouteScene {
       hazard.quaternion.copy(hazard.userData.baseQuaternion).multiply(wobble);
       hazard.position.y = hazard.userData.basePosition.y + Math.sin(now * 1.7) * 0.12;
     }
-    const flag = this.powerVisuals.person?.userData.flag;
-    if (flag) flag.rotation.z = Math.sin(now * 2.8) * 0.2;
   }
 }
 

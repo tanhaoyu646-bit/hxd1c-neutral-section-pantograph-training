@@ -37,7 +37,7 @@ function zoneLabel(distance) {
   if (distance <= n.closeWindowEnd) return '合标后允许合闸区';
   if (distance < p.preview) return '正常运行区';
   if (distance < p.prepare) return '临时升降弓预告区';
-  if (distance < p.lowerSign) return '准备降弓与手信号区';
+  if (distance < p.lowerSign) return '准备降弓操作区';
   if (distance < p.hazardStart) return '降弓确认区';
   if (distance <= p.hazardEnd) return '接触网异物区';
   if (distance < p.raiseSign) return '驶离异物区';

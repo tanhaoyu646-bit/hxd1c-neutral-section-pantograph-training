@@ -78,6 +78,7 @@ if (IS_POWER_APP) {
     lkjStartAttempted:true,
     lkjStartCorrect:true,
     lkjStartDistance:POWER_TRAINING_CONFIG.startDistance,
+    handSignalRequired:false,
     completed:false,
   });
 }
@@ -200,7 +201,7 @@ function startDrag(id, el, event) {
 function createFront() {
   overlay.replaceChildren(); elements={};
   signalTarget=document.createElement('button');signalTarget.type='button';signalTarget.className='signal-trigger';signalTarget.setAttribute('aria-label','点击地面出站信号机进行确认');signalTarget.addEventListener('click',(event)=>{event.stopPropagation();openSignalInspection();});overlay.append(signalTarget);
-  handSignalCard=document.createElement('section');handSignalCard.className='hand-signal-card';handSignalCard.setAttribute('aria-live','polite');handSignalCard.innerHTML='<b>确认发车手信号</b><video controls loop playsinline preload="metadata"><source src="./assets/video/AnimateDiff_00392-audio.mp4" type="video/mp4"></video><p>请观察发车手信号，确认显示正确后点击下方按钮。</p><button type="button" class="hand-signal-confirm">已确认发车手信号</button>';handSignalCard.querySelector('.hand-signal-confirm').addEventListener('click',()=>command('hand-signal-confirm'));overlay.append(handSignalCard);
+  if(!IS_POWER_APP){handSignalCard=document.createElement('section');handSignalCard.className='hand-signal-card';handSignalCard.setAttribute('aria-live','polite');handSignalCard.innerHTML='<b>确认发车手信号</b><video controls loop playsinline preload="metadata"><source src="./assets/video/AnimateDiff_00392-audio.mp4" type="video/mp4"></video><p>请观察发车手信号，确认显示正确后点击下方按钮。</p><button type="button" class="hand-signal-confirm">已确认发车手信号</button>';handSignalCard.querySelector('.hand-signal-confirm').addEventListener('click',()=>command('hand-signal-confirm'));overlay.append(handSignalCard);}
   elements.auto=makeSprite('auto-brake','HXD1C_DZ.png',35,341,45,60,4,3,'自动制动阀（拖动）');
   elements.independent=makeSprite('independent-brake','HXD1C_XZ.png',138,341,35,60,4,3,IS_CONTINUITY_APP?'单独制动阀（上下拖动换位；贯通阶段向右滑动并保持为侧缓）':'单独制动阀（拖动）');
   elements.traction=makeSprite('traction','HXD1C_GL.png',464,345,46,81,2,8,'牵引/电制动手柄（拖动）');
@@ -273,6 +274,7 @@ function syncPowerStateAliases(state){
 }
 function command(id,value) {
   const s=sim.state;
+  const previousPowerState=IS_POWER_APP?{previousMainBreaker:Boolean(s.mainBreaker)}:null;
   if(id==='direction'&&value===undefined)value=s.direction==='N'?'F':s.direction==='F'?'R':'N';
   let simulationValue=value;
   let assessmentAction=id;
@@ -296,7 +298,7 @@ function command(id,value) {
   if(accepted!==false&&lookoutAssessment){const assessmentId=id==='auto-brake'?'auto':id==='independent-brake'?'independent':id;const message=lookoutAssessment.recordCommand(assessmentId,value,sim.state);if(message)sim.emit(message);}
   if(accepted!==false&&powerAssessment){
     if(id==='traction'||id==='main-breaker'||assessmentAction==='rear-pantograph'){
-      const message=powerAssessment.recordAction(assessmentAction,assessmentValue,sim.state);if(message)sim.emit(message);
+      const message=powerAssessment.recordAction(assessmentAction,assessmentValue,sim.state,previousPowerState);if(message)sim.emit(message);
     }
     if(id==='compressor')sim.emit(`空压机开关置${value==='force'?'强泵':value==='auto'?'自动':'停止'}位；本项不计核心分。`);
   }
@@ -1040,9 +1042,9 @@ function renderSmoothStartPanel(state){
     const guide=$('#smooth-guide');
     if(guide){
       const items=[
-        ['分相预告与T断',state.distance>n.restoreEnd||scores.neutral>0,'T断后、断标前分主断；越过合标5～20m内合主断'],
+        ['分相预告与T断',state.distance>n.restoreEnd||scores.neutral>0,'T断后、断标前分主断；越过合标5～35m内合主断'],
         ['分相区断电惰行',state.assessment.checks['neutral-coast'],'牵引零位、主断分位通过分相起止位置'],
-        ['临时升降弓标与手信号',state.assessment.checks['panto-signal'],'呼唤确认由系统模拟副司机应答'],
+        ['临时升降弓标',state.assessment.checks['panto-signal'],'识别标志并呼唤，系统模拟副司机应答'],
         ['接触网异物处置',state.assessment.checks['panto-coast'],`${state.hazard?.label||'随机异物'}：后弓降下、主断分位、惰行通过`],
         ['越过升弓标恢复',state.assessment.checks['panto-restore'],'升后弓→确认网压→合主断→平稳恢复牵引'],
       ];

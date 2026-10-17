@@ -72,6 +72,7 @@ export class PowerTrainingSimulation extends EventTarget {
 
   setPantograph(position) {
     if (!['down', 'zero', 'up'].includes(position)) return;
+    const previousMainBreaker = this.state.mainBreaker;
     this.state.pantographSwitch = position;
     if (position === 'down') {
       this.state.rearPantograph = false;
@@ -85,7 +86,7 @@ export class PowerTrainingSimulation extends EventTarget {
     }
     const message = position === 'zero'
       ? '受电弓开关置0位；受电弓实际状态保持不变。'
-      : this.assessment.recordAction('rear-pantograph', position, this.state);
+      : this.assessment.recordAction('rear-pantograph', position, this.state, { previousMainBreaker });
     this.emit(message);
   }
 

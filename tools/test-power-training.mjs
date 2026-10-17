@@ -32,8 +32,6 @@ function runCorrectAttempt() {
   advance(sim, p.prepare + 10);
   sim.setTraction(0);
   sim.setMainBreaker('open');
-  advance(sim, p.handSignal + 2);
-  sim.callout();
   advance(sim, p.lowerSign - 5);
   sim.setPantograph('down');
   advance(sim, p.hazardStart + 1);
@@ -78,8 +76,48 @@ function runCriticalFailureChecks() {
   assert.equal(scores.pantograph, 0);
 }
 
+function runSafetyBoundaryChecks() {
+  const { neutral: n, pantograph: p } = POWER_TRAINING_CONFIG;
+
+  const earlyClose = new PowerTrainingSimulation({ random: () => 0 });
+  earlyClose.setMainBreaker('open');
+  advance(earlyClose, n.sectionEnd + 20);
+  earlyClose.state.lineVoltage = true;
+  earlyClose.setMainBreaker('close');
+  assert(earlyClose.state.assessment.incidents.some((item) => item.code === 'early-breaker-close'));
+
+  const breakerClosedLowering = new PowerTrainingSimulation({ random: () => 0 });
+  advance(breakerClosedLowering, p.prepare + 20);
+  breakerClosedLowering.setPantograph('down');
+  assert(breakerClosedLowering.state.assessment.incidents.some((item) => item.code === 'lower-with-breaker-closed'));
+
+  const earlyRaise = new PowerTrainingSimulation({ random: () => 0 });
+  earlyRaise.setMainBreaker('open');
+  earlyRaise.setPantograph('down');
+  advance(earlyRaise, p.hazardEnd + 20);
+  earlyRaise.setPantograph('up');
+  assert(earlyRaise.state.assessment.incidents.some((item) => item.code === 'early-raise'));
+}
+
+function runLayoutTimingChecks() {
+  const { neutral: n, pantograph: p, initialSpeed } = POWER_TRAINING_CONFIG;
+  const metresPerSecond = initialSpeed / 3.6;
+  const seconds = (distance) => distance / metresPerSecond;
+  assert(n.previewMarkers.every((distance, index, list) => index === 0 || distance - list[index - 1] >= 100));
+  assert(seconds(n.tBreak - n.noDoublePantograph) >= 9);
+  assert(seconds(n.breakSign - n.tBreak) >= 9);
+  assert(seconds(n.sectionStart - n.breakSign) >= 6);
+  assert(n.closeWindowEnd - n.closeWindowStart >= 30);
+  assert(seconds(p.lowerSign - p.prepare) >= 18);
+  assert(seconds(p.hazardStart - p.lowerSign) >= 9);
+  assert(seconds(p.raiseSign - p.hazardEnd) >= 9);
+  assert(seconds(p.restoreEnd - p.raiseSign) >= 18);
+}
+
 runCorrectAttempt();
 runMaintainedSwitchChecks();
 runCriticalFailureChecks();
+runSafetyBoundaryChecks();
+runLayoutTimingChecks();
 console.log('power training state-machine tests passed');
 

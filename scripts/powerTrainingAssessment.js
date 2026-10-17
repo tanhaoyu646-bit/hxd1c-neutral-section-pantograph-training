@@ -21,8 +21,6 @@ export function createPowerAssessment() {
     hazardExitedSafely: false,
     neutralTractionViolation: false,
     hazardPantoViolation: false,
-    pantoPreviewCalled: false,
-    pantoHandSignalCalled: false,
     lastDistance: POWER_TRAINING_CONFIG.startDistance,
     finished: false,
   };
@@ -62,13 +60,13 @@ export class PowerTrainingAssessment {
     state.assessment ||= createPowerAssessment();
   }
 
-  recordAction(action, value, state) {
+  recordAction(action, value, state, context = {}) {
     const a = state.assessment;
     const d = state.distance;
     let message = '';
 
     if (action === 'callout') {
-      if (d >= N.preview - 80 && d < N.noDoublePantograph - 30 && !a.checks['neutral-preview']) {
+      if (d >= N.previewMarkers[0] - 80 && d < N.noDoublePantograph - 80 && !a.checks['neutral-preview']) {
         a.checks['neutral-preview'] = true;
         message = '司机：分相预告，注意。副司机：注意。';
       } else if (d >= N.noDoublePantograph - 55 && d < N.tBreak + 20 && !a.checks['rear-panto']) {
@@ -76,14 +74,9 @@ export class PowerTrainingAssessment {
         message = a.checks['rear-panto']
           ? '司机：禁止双弓。副司机：后弓单弓好了。'
           : '司机：禁止双弓。副司机：受电弓状态不符合后弓单弓要求。';
-      } else if (d >= P.preview - 90 && d < P.handSignal - 35 && !a.checks['panto-signal']) {
-        a.pantoPreviewCalled = true;
-        a.checks['panto-signal'] = a.pantoPreviewCalled && a.pantoHandSignalCalled;
+      } else if (d >= P.preview - 100 && d < P.prepare + 100 && !a.checks['panto-signal']) {
+        a.checks['panto-signal'] = true;
         message = '司机：前方临时升降弓区段，准备降弓。副司机：准备降弓。';
-      } else if (d >= P.handSignal - 35 && d < P.lowerSign + 20) {
-        a.pantoHandSignalCalled = true;
-        a.checks['panto-signal'] = a.pantoPreviewCalled && a.pantoHandSignalCalled;
-        message = '司机：确认降弓手信号。副司机：降弓信号显示。';
       } else if (d >= P.raiseSign - 35 && d <= P.restoreEnd) {
         message = '司机：越过升弓标。副司机：升弓标越过。';
       } else {
@@ -121,8 +114,10 @@ export class PowerTrainingAssessment {
     }
     if (action === 'main-breaker' && value === 'close') {
       if (d >= N.closeWindowStart && d <= N.closeWindowEnd) a.checks['neutral-break-close'] = true;
-      if (d > N.closeSign && d < N.closeWindowStart) log(a, state, 'warning', '越过合标不足5m合主断。');
-      if (d > N.closeWindowEnd && d < N.restoreEnd) log(a, state, 'warning', '越过合标20m后才合主断。');
+      if (d > N.sectionEnd && d < N.closeWindowStart) {
+        invalidate(a, state, 'neutral', 'early-breaker-close', '未越过合标5m即合主断');
+      }
+      if (d > N.closeWindowEnd && d < N.restoreEnd) log(a, state, 'warning', '越过合标35m后才合主断。');
       if (d >= P.hazardStart && d <= P.hazardEnd) {
         invalidate(a, state, 'pantograph', 'hazard-breaker-close', '异物区内闭合主断路器');
       }
@@ -130,12 +125,15 @@ export class PowerTrainingAssessment {
     }
 
     if (action === 'rear-pantograph' && value === 'down') {
-      if (d >= P.handSignal && d < P.lowerSign) a.checks['panto-lower'] = true;
+      if (context.previousMainBreaker && d >= P.prepare - 80 && d < P.lowerSign + 20) {
+        invalidate(a, state, 'pantograph', 'lower-with-breaker-closed', '主断未手动分开即降弓');
+      }
+      if (d >= P.prepare && d < P.lowerSign) a.checks['panto-lower'] = true;
       message ||= '后受电弓已降。';
     }
     if (action === 'rear-pantograph' && value === 'up') {
-      if (d < P.hazardEnd && d >= P.hazardStart - 60) {
-        invalidate(a, state, 'pantograph', 'early-raise', '未完全越过接触网异物区即升弓');
+      if (d < P.raiseSign && d >= P.hazardStart - 60) {
+        invalidate(a, state, 'pantograph', 'early-raise', '未越过升弓标即升弓');
       }
       message ||= '后受电弓升弓命令已发出，等待网压建立。';
     }
