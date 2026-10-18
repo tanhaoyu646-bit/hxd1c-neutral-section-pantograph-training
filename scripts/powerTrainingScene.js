@@ -1,6 +1,6 @@
 import * as THREE from '../lib/three/three.module.js';
-import { MstsRouteScene } from './mstsRouteScene.js';
-import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=route-buffer-v7';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=rail-sign-order-v8';
+import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=rail-sign-order-v8';
 
 const POWER_SIGN_ASSET_URLS = Object.freeze({
   duan: new URL('../assets/power-signs/duan.json', import.meta.url).href,
@@ -207,6 +207,9 @@ export class PowerTrainingScene extends MstsRouteScene {
     const board = makeBoard(text, backText, options);
     board.name = `POWER_SIGN_${text}_${distance}`;
     board.userData.powerDistance = distance;
+    board.userData.revealAfterDistance = Number.isFinite(options.revealAfterDistance)
+      ? options.revealAfterDistance
+      : Number.NEGATIVE_INFINITY;
     board.scale.setScalar(1.5);
     board.userData.displayScale = 1.5;
     this.placeLookoutObject3D(board, distance, lateral);
@@ -221,13 +224,16 @@ export class PowerTrainingScene extends MstsRouteScene {
     return this.createSourceShapeObject({ shapes: { [fileName]: asset } }, fileName, name);
   }
 
-  addSourceSign(frontAssetId, backAssetId, distance, lateral, id) {
+  addSourceSign(frontAssetId, backAssetId, distance, lateral, id, options = {}) {
     const root = new THREE.Group();
     root.name = `POWER_SIGN_${id}_${distance}`;
     root.userData.source = 'JINGGUANG original MSTS shape';
     root.userData.frontAsset = frontAssetId;
     root.userData.backAsset = backAssetId;
     root.userData.powerDistance = distance;
+    root.userData.revealAfterDistance = Number.isFinite(options.revealAfterDistance)
+      ? options.revealAfterDistance
+      : Number.NEGATIVE_INFINITY;
     const front = this.createSourcePowerSign(frontAssetId, `${root.name}_FRONT`);
     const back = this.createSourcePowerSign(backAssetId, `${root.name}_BACK`);
     front.position.z = -0.012;
@@ -244,11 +250,14 @@ export class PowerTrainingScene extends MstsRouteScene {
     return root;
   }
 
-  addDiamondBoard(distance, lateral) {
+  addDiamondBoard(distance, lateral, options = {}) {
     const board = makeDiamondBoard();
     board.name = `POWER_SIGN_T_BREAK_${distance}`;
     board.userData.source = 'source-style supplement; no standalone T-break shape exists in JINGGUANG';
     board.userData.powerDistance = distance;
+    board.userData.revealAfterDistance = Number.isFinite(options.revealAfterDistance)
+      ? options.revealAfterDistance
+      : Number.NEGATIVE_INFINITY;
     board.scale.setScalar(1.65);
     board.userData.displayScale = 1.65;
     this.placeLookoutObject3D(board, distance, lateral);
@@ -266,9 +275,9 @@ export class PowerTrainingScene extends MstsRouteScene {
     const signLateral = 3.2;
 
     this.addSourceSign('jinzhi-shuanggong', 'k-jinzhi-shuanggong', n.noDoublePantograph, signLateral, 'NO_DOUBLE_PANTOGRAPH');
-    this.addDiamondBoard(n.tBreak, signLateral);
-    this.addSourceSign('duan', 'he', n.breakSign, signLateral, 'POWER_OFF');
-    this.addSourceSign('he', 'duan', n.closeSign, signLateral, 'POWER_ON');
+    this.addDiamondBoard(n.tBreak, signLateral, { revealAfterDistance: n.noDoublePantograph });
+    this.addSourceSign('duan', 'he', n.breakSign, signLateral, 'POWER_OFF', { revealAfterDistance: n.tBreak });
+    this.addSourceSign('he', 'duan', n.closeSign, signLateral, 'POWER_ON', { revealAfterDistance: n.sectionEnd });
 
     const startBoundary = makeInsulatorBoundary();
     startBoundary.name = 'POWER_NEUTRAL_SECTION_START';
@@ -280,9 +289,9 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.powerRoot.add(endBoundary);
 
     this.addBoard('临时\n升降弓', p.preview, signLateral, '临时\n升降弓', { color: '#a21219', border: '#a21219', fontSize: 84, lineHeight: 98 });
-    this.addSourceSign('zhunbei-jianggong', 'k-zhunbei-jianggong', p.prepare, signLateral, 'PREPARE_LOWER_PANTOGRAPH');
-    this.addSourceSign('jiang', 'sheng', p.lowerSign, signLateral, 'LOWER_PANTOGRAPH');
-    this.addSourceSign('sheng', 'jiang', p.raiseSign, signLateral, 'RAISE_PANTOGRAPH');
+    this.addSourceSign('zhunbei-jianggong', 'k-zhunbei-jianggong', p.prepare, signLateral, 'PREPARE_LOWER_PANTOGRAPH', { revealAfterDistance: p.preview });
+    this.addSourceSign('jiang', 'sheng', p.lowerSign, signLateral, 'LOWER_PANTOGRAPH', { revealAfterDistance: p.prepare });
+    this.addSourceSign('sheng', 'jiang', p.raiseSign, signLateral, 'RAISE_PANTOGRAPH', { revealAfterDistance: p.hazardEnd });
 
     const hazard = makeHazard(this.hazardType);
     this.placeLookoutObject3D(hazard, p.hazardObject, 0.35);
@@ -311,7 +320,11 @@ export class PowerTrainingScene extends MstsRouteScene {
       const markerDistance = Number(object.userData?.powerDistance);
       if (!Number.isFinite(markerDistance)) continue;
       const ahead = markerDistance - distance;
-      object.visible = ahead >= -POWER_SIGN_HIDE_BEHIND_DISTANCE && ahead <= POWER_SIGN_REVEAL_DISTANCE;
+      const revealAfterDistance = Number(object.userData?.revealAfterDistance);
+      const sequenceReady = !Number.isFinite(revealAfterDistance) || distance >= revealAfterDistance;
+      object.visible = sequenceReady
+        && ahead >= -POWER_SIGN_HIDE_BEHIND_DISTANCE
+        && ahead <= POWER_SIGN_REVEAL_DISTANCE;
     }
     const now = performance.now() / 1000;
     const hazard = this.powerVisuals.hazard;

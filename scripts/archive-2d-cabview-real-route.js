@@ -1,14 +1,14 @@
 import { TrainSimulation } from './dynamics.js?rev=power-physics-v31';
 import { getProcedure, procedureState, scoreRun } from './procedure.js?rev=notch-timing-v30';
-import { MstsRouteScene } from './mstsRouteScene.js?rev=lookout-baseline-v3';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=rail-sign-order-v8';
 import { LKJ_FIELD_DEFINITIONS, LKJ_TRAINING_PARAMETERS, RUNNING_NOTICES, SIGNAL_ASPECTS, TRAIN_DYNAMICS, SMOOTH_START_TERRAINS, getSmoothStartTerrain } from './scenario.js?rev=notch-timing-v30';
 import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './credentialScenario.js?rev=smooth-start-v19-cir-incoming-clickfix';
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js?rev=route-buffer-v7';
-import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js?rev=route-buffer-v7';
-import { PowerTrainingScene } from './powerTrainingScene.js?rev=route-buffer-v7';
+import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js?rev=rail-sign-order-v8';
+import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js?rev=rail-sign-order-v8';
+import { PowerTrainingScene } from './powerTrainingScene.js?rev=rail-sign-order-v8';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();

@@ -737,11 +737,19 @@ export class MstsRouteScene {
   }
 
   buildContinuousRailHeads(maxDistance) {
-    const railEvent = LOOKOUT_TRAINING_CONFIG.events.find((item) => item.visualKind === 'rail');
+    // “钢轨反光中断”只属于途中瞭望考核。过分相项目若复用该缺口，会在
+    // 4600–4780 m之间丢失远景轨顶LOD，看起来像近、远钢轨突然合拢断开。
+    const railEvent = this.isLookout
+      ? LOOKOUT_TRAINING_CONFIG.events.find((item) => item.visualKind === 'rail')
+      : null;
     // 正常反光在评分危险边界处突然终止，后续180 m保持暗哑。
     // 这样学生从约400 m外看到的视觉边界，与必须停车的位置一致。
-    const gapStart = Math.max(0, Number(railEvent?.hazardDistance || 0));
-    const gapEnd = Math.min(maxDistance, Number(railEvent?.glintBreakEndDistance || gapStart + 180));
+    const gapStart = railEvent
+      ? Math.max(0, Number(railEvent.hazardDistance || 0))
+      : maxDistance;
+    const gapEnd = railEvent
+      ? Math.min(maxDistance, Number(railEvent.glintBreakEndDistance || gapStart + 180))
+      : maxDistance;
     // 连续运行线保持 TrackDB 对齐，但轨腰、轨顶尺寸和纹理取自原游戏
     // A1t100mStrt：轨宽 0.15 m、轨腰高 0.125 m、ACleanTrack2 纹理。
     const railBodyMaterial = this.getMaterial({

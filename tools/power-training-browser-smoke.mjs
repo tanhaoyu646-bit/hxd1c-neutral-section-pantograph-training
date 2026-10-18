@@ -64,6 +64,8 @@ const summary = await evaluate(`(()=>{const names=[];let correctlyOrientedSource
   parking:Boolean(document.querySelector('.parking-apply')&&document.querySelector('.parking-release')),
   pathLength:window.__routeScene.pathLength,
   railLodSegments:names.filter((name)=>name.startsWith('MAINLINE_RAIL_VISIBILITY_')).length,
+  railGlintBreakSegments:names.filter((name)=>/^LOOKOUT_RAIL_(?:LEFT|RIGHT)_GLINT_BREAK$/.test(name)).length,
+  railVisibilityCoverage:(()=>{const root=window.__routeScene.routeRoot.getObjectByName('LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD');return(root?.children||[]).map((object)=>[object.userData.startDistance,object.userData.endDistance])})(),
   railTopLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_TOP_MATERIAL'),
   railSideLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_SIDE_MATERIAL'),
   railFadeRanges:window.__routeScene.railVisibilityMaterials.map((material)=>[material.uniforms.nearFadeStart.value,material.uniforms.nearFadeEnd.value]),
@@ -97,7 +99,9 @@ assert.equal(summary.lkj, true);
 assert.equal(summary.cir, true);
 assert.equal(summary.parking, true);
 assert(summary.pathLength > POWER_TRAINING_CONFIG.finishDistance);
-assert.equal(summary.railLodSegments, 8);
+assert.equal(summary.railLodSegments, 4);
+assert.equal(summary.railGlintBreakSegments, 0);
+assert(summary.railVisibilityCoverage.every(([start,end])=>start===0&&end>=summary.pathLength-1));
 assert.equal(summary.railTopLayer, true);
 assert.equal(summary.railSideLayer, true);
 assert(summary.railFadeRanges.every(([start,end])=>start>=40&&start<=90&&end>=110&&end<=180));
@@ -117,6 +121,26 @@ assert.equal(summary.handSignalCard, false);
 assert.equal(summary.hazard, true);
 assert.equal(summary.scoreGuideItems, 13);
 assert.equal(summary.overflowX, false);
+
+const signSequence = await evaluate(`(()=>{const s=window.__trainingSim.state;const scene=window.__routeScene;s.running=false;const visible=(name)=>Boolean(scene.powerRoot.getObjectByName(name)?.visible);const check=(distance)=>{s.distance=distance;scene.update(distance,s.speed,'front',false,s.wholeTrainStartFraction);return{tBreak:visible('POWER_SIGN_T_BREAK_${n.tBreak}'),powerOff:visible('POWER_SIGN_POWER_OFF_${n.breakSign}'),powerOn:visible('POWER_SIGN_POWER_ON_${n.closeSign}')}};return{beforeTBreak:check(${n.tBreak - 10}),beforePowerOff:check(${n.breakSign - 10}),beforeSectionEnd:check(${n.sectionEnd - 10}),afterSectionEnd:check(${n.sectionEnd + 1})}})()`);
+assert.deepEqual(signSequence, {
+  beforeTBreak: { tBreak: true, powerOff: false, powerOn: false },
+  beforePowerOff: { tBreak: false, powerOff: true, powerOn: false },
+  beforeSectionEnd: { tBreak: false, powerOff: false, powerOn: false },
+  afterSectionEnd: { tBreak: false, powerOff: false, powerOn: true },
+});
+
+await evaluate(`(()=>{const s=window.__trainingSim.state;s.distance=4500;window.__routeScene.update(s.distance,s.speed,'front',false,s.wholeTrainStartFraction);return true})()`);
+await new Promise((resolve) => setTimeout(resolve, 180));
+const railShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const railScreenshotPath = screenshotPath.replace(/\.png$/i, '-continuous-rail.png');
+await writeFile(railScreenshotPath, Buffer.from(railShot.data, 'base64'));
+
+await evaluate(`(()=>{const s=window.__trainingSim.state;s.distance=${n.breakSign - 50};window.__routeScene.update(s.distance,s.speed,'front',false,s.wholeTrainStartFraction);return true})()`);
+await new Promise((resolve) => setTimeout(resolve, 180));
+const orderShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const orderScreenshotPath = screenshotPath.replace(/\.png$/i, '-power-off-only.png');
+await writeFile(orderScreenshotPath, Buffer.from(orderShot.data, 'base64'));
 
 await evaluate(`(()=>{const s=window.__trainingSim.state;s.running=false;s.distance=${n.noDoublePantograph - 50};window.__routeScene.update(s.distance,s.speed,'front',false,s.wholeTrainStartFraction);return true})()`);
 await new Promise((resolve) => setTimeout(resolve, 180));
@@ -198,4 +222,4 @@ assert.deepEqual(perfectAttempt, { checks: 13, totalChecks: 13, invalidScenes: [
 assert.deepEqual(errors, []);
 assert.deepEqual(networkErrors, []);
 socket.close();
-console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath, signScreenshotPath }, null, 2));
+console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, signSequence, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath, signScreenshotPath, railScreenshotPath, orderScreenshotPath }, null, 2));
