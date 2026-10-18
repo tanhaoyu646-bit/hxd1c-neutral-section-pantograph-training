@@ -104,8 +104,8 @@ function runLayoutTimingChecks() {
   const { neutral: n, pantograph: p, initialSpeed, startDistance, routeShift } = POWER_TRAINING_CONFIG;
   const metresPerSecond = initialSpeed / 3.6;
   const seconds = (distance) => distance / metresPerSecond;
-  assert.equal(routeShift, 300);
-  assert(seconds(n.noDoublePantograph - 420 - startDistance) >= 25, '首块标牌进入可视范围前应至少留25秒入场缓冲');
+  assert.equal(routeShift, 1300);
+  assert(seconds(n.noDoublePantograph - 420 - startDistance) >= 90, '首块标牌进入可视范围前应至少留90秒入场缓冲');
   assert(n.preview < n.noDoublePantograph);
   assert(n.noDoublePantograph < n.tBreak);
   assert(n.tBreak < n.breakSign);

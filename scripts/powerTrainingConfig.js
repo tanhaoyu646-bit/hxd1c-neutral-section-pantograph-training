@@ -1,6 +1,6 @@
-// 保持司机初始位置不变，将整套教学区统一后移300 m。55 km/h下，首块
-// 标牌进入420 m可视范围前约有28 s，可覆盖约5 s的首屏加载并留下缓冲。
-const TRAINING_ROUTE_SHIFT = 300;
+// 保持司机初始位置不变，将整套教学区累计后移1300 m（本轮再后移1000 m）。
+// 55 km/h下，首块标牌进入420 m可视范围前约有94 s，可充分覆盖首屏加载。
+const TRAINING_ROUTE_SHIFT = 1300;
 const shifted = (distance) => distance + TRAINING_ROUTE_SHIFT;
 
 export const POWER_TRAINING_CONFIG = Object.freeze({
