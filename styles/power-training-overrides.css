@@ -1,5 +1,23 @@
 body[data-training-app="power-training"] .callout-button{border-color:#f0c457;background:#66480de8;color:#fff0b0}
 body[data-training-app="power-training"] .coach-progress{display:none}
+body[data-training-app="power-training"] #power-live-score{color:#75efb1;font-size:12px}
+body[data-training-app="power-training"] #procedure li{padding:8px 3px}
+body[data-training-app="power-training"] #procedure li>b{display:flex;justify-content:space-between;gap:8px;color:inherit;font-size:11px}
+body[data-training-app="power-training"] #procedure li em{flex:none;color:#f0c457;font-size:10px;font-style:normal}
+body[data-training-app="power-training"] #procedure li small{display:block;margin-top:4px;color:#759eb2;font-size:9px;line-height:1.45}
+body[data-training-app="power-training"] #procedure li.done em{color:#6ce5a7}
+body[data-training-app="power-training"] #procedure li.invalid{border-color:#8d3e49;color:#ffadb4;background:#3b161d88}
+body[data-training-app="power-training"] #procedure li.invalid em{color:#ff8d98}
+body[data-training-app="power-training"] .power-score-group{margin-top:10px;border:1px solid #285f7b;border-radius:8px;background:#061722}
+body[data-training-app="power-training"] .power-score-group h3{display:flex;justify-content:space-between;margin:0;padding:8px 9px;border-bottom:1px solid #285f7b;font-size:12px}
+body[data-training-app="power-training"] .power-score-group h3 span{color:#75efb1}
+body[data-training-app="power-training"] .power-score-group ol{margin:0;padding:4px 8px 6px 28px;max-height:none}
+body[data-training-app="power-training"] .power-score-group li{padding:6px 2px}
+body[data-training-app="power-training"] .power-score-group li b,body[data-training-app="power-training"] .power-score-group li span{display:block}
+body[data-training-app="power-training"] .power-score-group li b{color:#d9f3ff;font-size:11px}
+body[data-training-app="power-training"] .power-score-group li em{float:right;color:#f0c457;font-size:10px;font-style:normal}
+body[data-training-app="power-training"] .power-score-group li span{margin-top:3px;color:#87afc1;font-size:9px;line-height:1.45}
+body[data-training-app="power-training"] .power-physics-note{padding:9px;border:1px solid #76622c;border-radius:7px;background:#30270988;color:#dbc988;font-size:10px;line-height:1.55}
 
 /* 原实物照片式板钮面板只停靠在驾驶台下部，不再形成全屏遮罩。 */
 body[data-training-app="power-training"] .switch-panel-modal.power-switch-docked{

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { PowerTrainingSimulation } from '../scripts/powerTrainingSimulation.js';
 import { powerSceneScores } from '../scripts/powerTrainingAssessment.js';
 import { POWER_TRAINING_CONFIG } from '../scripts/powerTrainingConfig.js';
+import { TrainSimulation } from '../scripts/dynamics.js';
 
 function advance(sim, distance) {
   sim.state.distance = distance;
@@ -112,11 +113,35 @@ function runLayoutTimingChecks() {
   assert(seconds(n.tBreak - n.noDoublePantograph) >= 9);
   assert(seconds(n.breakSign - n.tBreak) >= 9);
   assert(seconds(n.sectionStart - n.breakSign) >= 6);
-  assert(n.closeWindowEnd - n.closeWindowStart >= 30);
+  assert.equal(n.closeWindowEnd - n.closeWindowStart, 15);
   assert(seconds(p.lowerSign - p.prepare) >= 18);
   assert(seconds(p.hazardStart - p.lowerSign) >= 9);
   assert(seconds(p.raiseSign - p.hazardEnd) >= 9);
   assert(seconds(p.restoreEnd - p.raiseSign) >= 18);
+}
+
+function runPowerPhysicsChecks() {
+  const sim = new TrainSimulation();
+  sim.state.trainingMode = 'assessment';
+  sim.state.trainingScope = 'power-training';
+  sim.applySmoothStartPreset();
+  Object.assign(sim.state, {
+    parkingBrake: false, autoBrake: 0, independentBrake: 0,
+    panto: true, mainBreaker: true, compressor: true, netVoltage: 25,
+    direction: 'F', speed: 55, distance: POWER_TRAINING_CONFIG.startDistance,
+    traction: 2, actualTraction: 2, tractionCurrent: 210,
+    wholeTrainStartFraction: 1, wholeTrainStarted: true, releasePropagation: 1,
+  });
+  for (let index = 0; index < 3000; index += 1) sim.tick(0.1);
+  assert(sim.state.speed >= 53 && sim.state.speed < 60, `2.0级五分钟速度异常：${sim.state.speed.toFixed(1)} km/h`);
+  sim.command('main-breaker', false);
+  assert.equal(sim.state.tractionCurrent, 0);
+  assert.equal(sim.state.tractionForce, 0);
+  assert(sim.state.netVoltage >= 19, '分主断不应让仍升弓的网压消失');
+  sim.command('panto', false);
+  assert.equal(sim.state.netVoltage, 0);
+  assert.equal(sim.state.tractionCurrent, 0);
+  assert.equal(sim.state.tractionForce, 0);
 }
 
 runCorrectAttempt();
@@ -124,5 +149,6 @@ runMaintainedSwitchChecks();
 runCriticalFailureChecks();
 runSafetyBoundaryChecks();
 runLayoutTimingChecks();
+runPowerPhysicsChecks();
 console.log('power training state-machine tests passed');
 

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="./styles/smooth-start.css?rev=power-cab-v2">
   <link rel="stylesheet" href="./styles/credential-training.css?rev=power-cab-v2">
   <link rel="stylesheet" href="./styles/continuity-test.css?rev=power-cab-v2">
-  <link rel="stylesheet" href="./styles/power-training-overrides.css?rev=power-cab-v2">
+  <link rel="stylesheet" href="./styles/power-training-overrides.css?rev=power-physics-v3">
 </head>
 <body data-training-app="power-training">
   <div id="landscape-gate" class="landscape-gate" hidden aria-modal="true" role="dialog">
@@ -51,11 +51,11 @@
       <div id="hint" class="hint" aria-live="polite">考核初始状态：55 km/h稳定运行、后弓单弓、主断合、空压机自动。点击驾驶台中部板钮区域打开原样式板钮面板。</div>
 
       <section id="smooth-training-panel" class="smooth-training" aria-label="途中过分相与升降弓动态状态">
-        <div class="smooth-training-head"><div><strong>手动过分相60分＋临时升降弓与异物处置40分</strong><span>安全关键错误使对应场景记0分，考核继续</span></div><small>系统模拟副司机应答；驾驶操作与原游戏保持一致</small></div>
+        <div class="smooth-training-head"><div><strong>手动过分相60分＋临时升降弓与异物处置40分</strong><span>安全关键错误使对应场景记0分，考核继续</span></div><small>实时得分 <b id="power-live-score">0/100分</b> · 点击“考评说明”查看13项得分条件</small></div>
         <div class="dynamic-strip" aria-label="动态状态">
           <div><span>速度</span><b id="metric-speed">55.0 km/h</b></div>
           <div><span>牵引级位</span><b id="metric-traction">2.0级</b></div>
-          <div><span>列车管</span><b id="metric-start">600 kPa</b></div>
+          <div><span>原边电流</span><b id="metric-start">210 A</b></div>
           <div><span>网压</span><b id="metric-acceleration">25.0 kV</b></div>
           <div><span>主断 / 后弓</span><b id="metric-jerk">合 / 后弓升</b></div>
           <div><span id="metric-context-label">当前考核区段</span><b id="metric-lkj">驶向分相操作区</b></div>
@@ -81,6 +81,6 @@
   </main>
 
   <button id="workflow-scrim" class="drawer-backdrop workflow-scrim" type="button" aria-label="关闭侧栏"></button>
-  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=power-cab-v2"></script>
+  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=power-physics-v3"></script>
 </body>
 </html>

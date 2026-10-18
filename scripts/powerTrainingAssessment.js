@@ -1,6 +1,7 @@
 import { POWER_SCORING, POWER_TRAINING_CONFIG } from './powerTrainingConfig.js';
 
 const { neutral: N, pantograph: P } = POWER_TRAINING_CONFIG;
+const ALL_SCORING_ITEMS = [...POWER_SCORING.neutral, ...POWER_SCORING.pantograph];
 const crossed = (from, to, target) => from < target && to >= target;
 
 function blankChecks() {
@@ -63,6 +64,8 @@ export class PowerTrainingAssessment {
   recordAction(action, value, state, context = {}) {
     const a = state.assessment;
     const d = state.distance;
+    const checksBefore = { ...a.checks };
+    const incidentsBefore = a.incidents.length;
     let message = '';
 
     if (action === 'callout') {
@@ -117,7 +120,7 @@ export class PowerTrainingAssessment {
       if (d > N.sectionEnd && d < N.closeWindowStart) {
         invalidate(a, state, 'neutral', 'early-breaker-close', '未越过合标5m即合主断');
       }
-      if (d > N.closeWindowEnd && d < N.restoreEnd) log(a, state, 'warning', '越过合标35m后才合主断。');
+      if (d > N.closeWindowEnd && d < N.restoreEnd) log(a, state, 'warning', '越过合标20m后才合主断。');
       if (d >= P.hazardStart && d <= P.hazardEnd) {
         invalidate(a, state, 'pantograph', 'hazard-breaker-close', '异物区内闭合主断路器');
       }
@@ -138,6 +141,10 @@ export class PowerTrainingAssessment {
       message ||= '后受电弓升弓命令已发出，等待网压建立。';
     }
 
+    const newIncident = a.incidents[incidentsBefore];
+    const awarded = ALL_SCORING_ITEMS.filter((item) => !checksBefore[item.id] && a.checks[item.id]);
+    if (newIncident) message = `安全关键错误：${newIncident.message}；${newIncident.scene === 'neutral' ? '手动过分相' : '升降弓与异物处置'}场景记0分。`;
+    else if (awarded.length) message = `${message} 已取得${awarded.map((item) => `${item.label}${item.points}分`).join('、')}。`;
     if (message) log(a, state, 'operation', message);
     return message;
   }

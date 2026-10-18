@@ -72,6 +72,7 @@ const summary = await evaluate(`(()=>{const names=[];let reverseSourceSigns=0;le
   powerRoot:names.includes('POWER_TRAINING_SCENERY'),onsitePerson:names.includes('POWER_ONSITE_HAND_SIGNAL_PERSON'),
   handSignalCard:Boolean(document.querySelector('.hand-signal-card')),
   hazard:names.some((name)=>name.startsWith('POWER_HAZARD_')),
+  scoreGuideItems:document.querySelectorAll('.power-score-group li').length,
   overflowX:document.documentElement.scrollWidth>document.documentElement.clientWidth+1
 }})()`);
 assert.equal(summary.title, '途中过分相+升降弓');
@@ -105,6 +106,7 @@ assert.equal(summary.powerRoot, true);
 assert.equal(summary.onsitePerson, false);
 assert.equal(summary.handSignalCard, false);
 assert.equal(summary.hazard, true);
+assert.equal(summary.scoreGuideItems, 13);
 assert.equal(summary.overflowX, false);
 
 await evaluate(`document.querySelector('.switch-panel-trigger').click();true`);
@@ -154,7 +156,31 @@ assert(safetyBoundary.incidents.includes('lower-with-breaker-closed'));
 assert(safetyBoundary.incidents.includes('early-raise'));
 assert(safetyBoundary.incidents.includes('early-breaker-close'));
 
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+await send('Page.navigate', { url });
+await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&window.__powerAssessment){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('满分流程复测初始化超时'))}},100)})`, true);
+const perfectAttempt = await evaluate(`(()=>{const s=window.__trainingSim.state;const a=window.__powerAssessment;const move=(distance)=>{s.distance=distance;a.update(s)};const callout=()=>a.recordAction('callout',true,s);
+  move(1500);callout();
+  move(1746);callout();window.__trainingCommand('traction',0);
+  move(1951);window.__trainingCommand('main-breaker','open');
+  move(2201);move(2401);
+  move(2506);s.netVoltage=25;s.lineVoltage=true;window.__trainingCommand('main-breaker','close');
+  move(2521);window.__trainingCommand('traction',2);
+  move(3300);callout();
+  move(3510);window.__trainingCommand('traction',0);window.__trainingCommand('main-breaker','open');
+  move(3795);window.__trainingCommand('panto','down');
+  move(3951);move(4251);
+  move(4405);window.__trainingCommand('panto','up');s.netVoltage=25;s.lineVoltage=true;window.__trainingCommand('main-breaker','close');window.__trainingCommand('traction',2);
+  move(5000);window.__trainingSim.emit('满分流程复测');
+  return {checks:Object.values(s.assessment.checks).filter(Boolean).length,totalChecks:Object.keys(s.assessment.checks).length,invalidScenes:s.assessment.invalidScenes,incidents:s.assessment.incidents.map((item)=>item.code)}
+})()`);
+await new Promise((resolve) => setTimeout(resolve, 100));
+perfectAttempt.liveScore = await evaluate(`document.querySelector('#power-live-score').textContent`);
+perfectAttempt.completedRows = await evaluate(`document.querySelectorAll('#procedure li.done').length`);
+assert.deepEqual(perfectAttempt, { checks: 13, totalChecks: 13, invalidScenes: [], incidents: [], liveScore: '100/100分', completedRows: 13 });
+
 assert.deepEqual(errors, []);
 assert.deepEqual(networkErrors, []);
 socket.close();
-console.log(JSON.stringify({ summary, docked, maintained, threePosition, mobileLayout, safetyBoundary, screenshotPath, switchScreenshotPath }, null, 2));
+console.log(JSON.stringify({ summary, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath }, null, 2));

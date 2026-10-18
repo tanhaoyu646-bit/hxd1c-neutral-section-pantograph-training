@@ -1,4 +1,4 @@
-import { TrainSimulation } from './dynamics.js?rev=notch-timing-v30';
+import { TrainSimulation } from './dynamics.js?rev=power-physics-v31';
 import { getProcedure, procedureState, scoreRun } from './procedure.js?rev=notch-timing-v30';
 import { MstsRouteScene } from './mstsRouteScene.js?rev=lookout-baseline-v3';
 import { LKJ_FIELD_DEFINITIONS, LKJ_TRAINING_PARAMETERS, RUNNING_NOTICES, SIGNAL_ASPECTS, TRAIN_DYNAMICS, SMOOTH_START_TERRAINS, getSmoothStartTerrain } from './scenario.js?rev=notch-timing-v30';
@@ -72,6 +72,7 @@ if (IS_POWER_APP) {
     distance:POWER_TRAINING_CONFIG.startDistance,
     traction:2,
     actualTraction:2,
+    tractionCurrent:210,
     wholeTrainStartFraction:1,
     wholeTrainStarted:true,
     releasePropagation:1,
@@ -269,7 +270,7 @@ function syncPowerStateAliases(state){
   if(!IS_POWER_APP)return;
   state.rearPantograph=Boolean(state.panto);
   state.frontPantograph=false;
-  state.compressorRunning=Boolean(state.compressor);
+  state.compressorRunning=Boolean(state.compressor&&state.mainBreaker);
   state.lineVoltage=state.netVoltage>=19;
 }
 function command(id,value) {
@@ -532,7 +533,7 @@ function lkjMonitorView(overlay=''){
   const speedScale=state.trainingScope==='continuity'?150:120;const controlY=390-Math.min(speedScale,controlLimit)/speedScale*330;
   const trace=lkjSpeedTracePoints(state.distance);const status=state.lkjStartCorrect?'开车对标完成':state.speed>=1?'运行监控':'停车监控';
   const special=state.lkjUnlockCorrect?`<div class="lkj-native-special ${scenario.id}">${scenario.id==='greenPermit'?'绿色许可证行车':'路票行车'}</div>`:'';
-  const equipment=lkjEquipmentPanelVisible?`<aside class="lkj-native-equipment"><b>原边电流 <em>${Math.round(Math.max(0,state.actualTraction)*105)}</em></b><b>列车管压力 <em>${Math.round(state.trainPipe)}</em></b><b>制动缸压力1 <em>${Math.round(state.brakeCyl)}</em></b><b>均衡风缸 <em>${Math.round(state.equalizingRes)}</em></b><b>制动缸压力2 <em>${Math.round(state.brakeCyl)}</em></b><b>工况 <em>${state.direction==='F'?'向前':state.direction==='R'?'向后':'零位'}　${state.traction>0?'牵引':'非零'}</em></b><b>过机矫正 <em>0　0　0</em></b><b>通道速度 <em>${Math.round(state.speed)}　${Math.round(state.speed)}　${Math.round(state.speed)}</em></b></aside>`:'';
+  const equipment=lkjEquipmentPanelVisible?`<aside class="lkj-native-equipment"><b>原边电流 <em>${Math.round(Math.max(0,state.tractionCurrent||0))}</em></b><b>列车管压力 <em>${Math.round(state.trainPipe)}</em></b><b>制动缸压力1 <em>${Math.round(state.brakeCyl)}</em></b><b>均衡风缸 <em>${Math.round(state.equalizingRes)}</em></b><b>制动缸压力2 <em>${Math.round(state.brakeCyl)}</em></b><b>工况 <em>${state.direction==='F'?'向前':state.direction==='R'?'向后':'零位'}　${state.tractionForce>0?'牵引':'惰行'}</em></b><b>过机矫正 <em>0　0　0</em></b><b>通道速度 <em>${Math.round(state.speed)}　${Math.round(state.speed)}　${Math.round(state.speed)}</em></b></aside>`:'';
   return lkjFrame(`${lkjNativeTop(state)}${special}<svg class="lkj-native-chart" viewBox="0 0 800 615" preserveAspectRatio="none" aria-label="LKJ运行监控曲线"><polyline class="lkj-control-line" points="64,${controlY} 232,${controlY} 278,${controlY} 736,${controlY}"/><line class="lkj-position-line" x1="${LKJ_POSITION_X}" y1="61" x2="${LKJ_POSITION_X}" y2="390"/>${trace?`<polyline class="lkj-speed-line" points="${trace}"/>`:''}</svg>${equipment}<div class="lkj-native-status">${status}</div>${lkjNotice?`<div class="lkj-device-toast">${lkjNotice}</div>`:''}${overlay}`);
 }
 function lkjNonnormalOverlay(){
@@ -779,7 +780,8 @@ function openDeliveredCredential(){
 function buildTrainingControls(){
   const root=$('#training-controls');if(!root)return;
   if(IS_POWER_APP){
-    root.innerHTML=`<div class="continuity-summary"><b>固定考评线路 · 总分100分</b><br>手动过分相60分，临时升降弓与接触网异物处置40分。安全关键错误使对应场景记0分，但考核继续。<br><br>本次随机异物：<b>${sim.state.hazard?.label||'待生成'}</b><br>后弓单弓；空压机保持自动位；主断、受电弓开关动作后不自动回0位。</div><button type="button" class="continuity-reset" data-continuity-reset>重新开始本次考评</button><p class="training-state" data-training-state>当前：考评模式 · 55 km/h区间运行</p>`;
+    const scoringGroup=(title,total,items)=>`<section class="power-score-group"><h3>${title}<span>${total}分</span></h3><ol>${items.map((item)=>`<li><b>${item.label}<em>${item.points}分</em></b><span>${item.instruction}</span></li>`).join('')}</ol></section>`;
+    root.innerHTML=`<div class="continuity-summary"><b>怎样取得100分</b><br>按下列13项在规定位置完成，操作后可在“考评流程”和运行数据区立即看到得分。安全关键错误会使对应场景整段记0分，但考核继续。<br><br>本次随机异物：<b>${sim.state.hazard?.label||'待生成'}</b><br>后弓单弓；空压机保持自动位；主断、受电弓开关动作后不自动回0位。</div>${scoringGroup('一、手动过分相',60,POWER_SCORING.neutral)}${scoringGroup('二、临时升降弓与异物处置',40,POWER_SCORING.pantograph)}<p class="power-physics-note"><b>仪表判读：</b>分主断后原边电流应为0，但受电弓仍升起且未进入无电区时，网压保持约25kV属于正常；降弓或进入分相无电区后，网压与原边电流均为0。</p><button type="button" class="continuity-reset" data-continuity-reset>重新开始本次考评</button><p class="training-state" data-training-state>当前：考评模式 · 55 km/h区间运行</p>`;
     root.querySelector('[data-continuity-reset]').addEventListener('click',()=>location.reload());
     return;
   }
@@ -977,7 +979,7 @@ function render(state,message='') {
     // 严格按原 HXD1C.cvf 的 DIAL ScaleRange 映射；不能为了夸大变化
     // 临时缩小量程，否则同一压力会落在错误刻度。
     setNeedle(elements.speedNeedle,state.speed,158); setNeedle(elements.mainNeedle,state.mainRes,1600); setNeedle(elements.pipeNeedle,state.trainPipe,1000); setNeedle(elements.eqNeedle,state.equalizingRes,1600); setNeedle(elements.cylNeedle,state.brakeCyl,1600); setNeedle(elements.mainNeedle2,state.mainRes,1600); setNeedle(elements.pipeNeedle2,state.trainPipe,1600); setNeedle(elements.eqNeedle2,state.equalizingRes,1600); setNeedle(elements.cylNeedle2,state.brakeCyl,1600);
-    const current=Math.max(0,state.actualTraction)*105; elements.voltageBar.style.transform=`scaleY(${Math.max(.03,state.netVoltage/30)})`; elements.currentBars.forEach((bar,index)=>bar.style.transform=`scaleY(${Math.max(.02,Math.min(1,(current-index*22)/1000))})`);
+    const current=Math.max(0,state.tractionCurrent||0); elements.voltageBar.style.transform=`scaleY(${Math.max(.03,state.netVoltage/30)})`; elements.currentBars.forEach((bar,index)=>bar.style.transform=`scaleY(${Math.max(.02,Math.min(1,(current-index*22)/1000))})`);
     const scenario=getScenario(state.scenarioId);const activeLimit=isContinuityPhase(state)?ROUTE_TRAINING_PROFILE.firstBlockSpeedLimitKmh:state.lkjUnlockCorrect&&state.lkjUnlockLimit?state.lkjUnlockLimit:state.limitedStart?15:scenario.requiresLkjUnlock?20:80;
     elements.speedDigital.textContent=state.speed<10?state.speed.toFixed(1):Math.round(state.speed); elements.limitDigital.textContent=String(activeLimit); elements.clockDigital.textContent=new Date().toLocaleTimeString('zh-CN',{hour12:false});
     const autoNames=['运转位','初制动位','常用制动Ⅱ','常用制动Ⅲ','常用制动Ⅳ','紧急位'];const independentNames=['缓解位','制动Ⅰ','制动Ⅱ','制动Ⅲ','制动Ⅳ','全制动位'];
@@ -999,10 +1001,11 @@ function render(state,message='') {
   if(IS_POWER_APP){
     const assessment=state.assessment;const score=powerSceneScores(assessment);const items=[...POWER_SCORING.neutral,...POWER_SCORING.pantograph];
     const completed=items.filter((item)=>assessment.checks[item.id]).length;
-    const procedureRoot=$('#procedure');const signature=items.map((item)=>`${item.id}:${assessment.checks[item.id]}`).join('|');
-    if(procedureRoot&&procedureRoot.dataset.signature!==signature){procedureRoot.dataset.signature=signature;procedureRoot.innerHTML=items.map((item,index)=>`<li class="${assessment.checks[item.id]?'done':index===items.findIndex((candidate)=>!assessment.checks[candidate.id])?'active':''}">${item.label}（${item.points}分）</li>`).join('');}
+    const procedureRoot=$('#procedure');const signature=`${assessment.invalidScenes.join(',')}|${items.map((item)=>`${item.id}:${assessment.checks[item.id]}`).join('|')}`;
+    if(procedureRoot&&procedureRoot.dataset.signature!==signature){procedureRoot.dataset.signature=signature;procedureRoot.innerHTML=items.map((item,index)=>{const scene=index<POWER_SCORING.neutral.length?'neutral':'pantograph';const invalid=assessment.invalidScenes.includes(scene);const done=assessment.checks[item.id]&&!invalid;const active=!invalid&&!assessment.checks[item.id]&&index===items.findIndex((candidate,itemIndex)=>!assessment.invalidScenes.includes(itemIndex<POWER_SCORING.neutral.length?'neutral':'pantograph')&&!assessment.checks[candidate.id]);return `<li class="${invalid?'invalid':done?'done':active?'active':''}"><b>${item.label}<em>${invalid?'场景0分':done?`已得${item.points}分`:`${item.points}分`}</em></b><small>${item.instruction}</small></li>`;}).join('');}
     const remaining=Math.max(0,Math.round(POWER_TRAINING_CONFIG.finishDistance-state.distance));
-    $('#status').innerHTML=`<strong>状态：</strong>${assessment.finished?'考评已结算':powerStageLabel(state.distance)}<br>后弓 ${state.panto?'升':'降'} · 主断 ${state.mainBreaker?'合':'分'} · 网压 ${state.netVoltage.toFixed(1)} kV<br>总风 ${state.mainRes.toFixed(0)} kPa · 列车管 ${state.trainPipe.toFixed(0)} kPa · 停放制动 ${state.parkingBrake?'施加':'缓解'}<br>速度 ${state.speed.toFixed(1)} km/h · 距终点 ${remaining} m<br>当前得分 ${score.total}（过分相${score.neutral}/60，升降弓${score.pantograph}/40）`;
+    $('#status').innerHTML=`<strong>状态：</strong>${assessment.finished?'考评已结算':powerStageLabel(state.distance)}<br>后弓 ${state.panto?'升':'降'} · 主断 ${state.mainBreaker?'合':'分'} · 网压 ${state.netVoltage.toFixed(1)} kV · 原边电流 ${Math.round(state.tractionCurrent||0)} A<br>总风 ${state.mainRes.toFixed(0)} kPa · 列车管 ${state.trainPipe.toFixed(0)} kPa · 停放制动 ${state.parkingBrake?'施加':'缓解'}<br>速度 ${state.speed.toFixed(1)} km/h · 距终点 ${remaining} m<br>当前得分 ${score.total}（过分相${score.neutral}/60，升降弓${score.pantograph}/40）`;
+    const liveScore=$('#power-live-score');if(liveScore)liveScore.textContent=`${score.total}/100分`;
     const workflowProgress=$('[data-workflow-progress]');if(workflowProgress)workflowProgress.textContent=`${completed}/${items.length}`;
     renderSmoothStartPanel(state);if(message)$('#hint').textContent=message;if(assessment.finished)showResultReport(state);return;
   }
@@ -1034,7 +1037,7 @@ function renderSmoothStartPanel(state){
     const scores=powerSceneScores(state.assessment);const n=POWER_TRAINING_CONFIG.neutral;const p=POWER_TRAINING_CONFIG.pantograph;
     setText('#metric-speed',`${state.speed.toFixed(1)} km/h`);
     setText('#metric-traction',state.traction>0?`${state.traction.toFixed(1)}级`:state.traction<0?`电制动${Math.abs(state.traction).toFixed(1)}级`:'零位');
-    setText('#metric-start',`${Math.round(state.trainPipe)} kPa`);
+    setText('#metric-start',`${Math.round(state.tractionCurrent||0)} A`);
     setText('#metric-acceleration',`${state.netVoltage.toFixed(1)} kV`);
     setText('#metric-jerk',`${state.mainBreaker?'合':'分'} / 后弓${state.panto?'升':'降'}`);
     setText('#metric-context-label','当前考核区段');

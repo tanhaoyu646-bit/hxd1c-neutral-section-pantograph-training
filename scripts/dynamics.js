@@ -61,7 +61,7 @@ export class TrainSimulation {
       // 列车管/均衡风缸运转压力 87.02 psi（约 600 kPa）。
       mainRes: 750, equalizingRes: 600, trainPipe: 600, tailPipe: 598, brakeCyl: 0,
       initialChecks: Object.fromEntries(Object.keys(INITIAL_CHECK_LABELS).map((key) => [key, false])),
-      netVoltage: 0, speed: 0, distance: 0, tractionForce: 0, brakeForce: 0,
+      netVoltage: 0, speed: 0, distance: 0, tractionForce: 0, tractionCurrent: 0, brakeForce: 0,
       brakeTested: false, releaseObserved: false, elapsed: 0,
       consistCars: 12, releasePropagation: 0, actualTraction: 0, couplerForce: 0,
       wholeTrainStartFraction: 0, wholeTrainStarted: false,
@@ -816,8 +816,8 @@ export class TrainSimulation {
       return true;
     }
     if (id === 'lkj') { s.lkjData = { debug: true }; s.lkjAttempted = true; s.lkjCorrect = true; s.lkjConfirmed = true; s.lkjStartAttempted = false; s.lkjStartCorrect = false; this.syncAuthority(); this.emit('调试快捷操作：LKJ 已确认。'); return true; }
-    if (id === 'panto') { const next=value===undefined?!s.panto:Boolean(value); if (next && !this.lkjWorkflowReady() && !this.isAssessment()) return this.reject('请先完成 LKJ 参数输入与运行揭示核对。'); this.invalidateInitialCheck('panto'); s.panto = next; if (!s.panto) s.mainBreaker = false; this.emit(s.panto ? '受电弓已升起，正在建立网压。' : '受电弓已降下。'); return true; }
-    if (id === 'main-breaker') { const next=value===undefined?!s.mainBreaker:Boolean(value); if (next && (!s.panto || s.netVoltage < 19)) return this.reject('网压未建立，禁止闭合主断路器。'); this.invalidateInitialCheck('mainBreaker'); s.mainBreaker = next; this.emit(s.mainBreaker ? '主断路器已闭合。' : '主断路器已断开。'); return true; }
+    if (id === 'panto') { const next=value===undefined?!s.panto:Boolean(value); if (next && !this.lkjWorkflowReady() && !this.isAssessment()) return this.reject('请先完成 LKJ 参数输入与运行揭示核对。'); this.invalidateInitialCheck('panto'); s.panto = next; if (!s.panto) { s.mainBreaker = false; s.netVoltage = 0; s.tractionCurrent = 0; s.tractionForce = 0; } this.emit(s.panto ? '受电弓已升起，正在建立网压。' : '受电弓已降下，网压与原边电流归零。'); return true; }
+    if (id === 'main-breaker') { const next=value===undefined?!s.mainBreaker:Boolean(value); if (next && (!s.panto || s.netVoltage < 19)) return this.reject('网压未建立，禁止闭合主断路器。'); this.invalidateInitialCheck('mainBreaker'); s.mainBreaker = next; if (!s.mainBreaker) { s.tractionCurrent = 0; s.tractionForce = 0; } this.emit(s.mainBreaker ? '主断路器已闭合。' : '主断路器已断开，牵引力与原边电流归零。'); return true; }
     if (id === 'compressor') { const next=value===undefined?!s.compressor:Boolean(value); if (next && !s.mainBreaker) return this.reject('主断路器未闭合，空压机不能投入。'); this.invalidateInitialCheck('compressor'); s.compressor = next; this.emit(s.compressor ? '空气压缩机已投入。' : '空气压缩机已停止。'); return true; }
     if (id === 'parking-apply') { this.invalidateInitialCheck('parkingBrake'); s.parkingBrake = true; this.emit('停放制动已施加。'); return true; }
     if (id === 'parking-release') { if (s.mainRes < 600) return this.reject('总风压力低于 600 kPa，不能缓解停放制动。'); this.invalidateInitialCheck('parkingBrake'); s.parkingBrake = false; this.emit('停放制动已缓解。'); return true; }
@@ -1015,6 +1015,11 @@ export class TrainSimulation {
     s.actualTraction += ((s.traction > 0 ? s.traction : 0) - s.actualTraction) * Math.min(1, dt * .72);
     const tractionAllowed = this.tractionInterlockReasons(s.traction).length === 0;
     const normalSpeedPowerFactor = Math.max(.34, 1 - s.speed / 125);
+    // 本专项以55 km/h、2.0级稳定运行开局。通用发车模型的低级位牵引力
+    // 对途中重载巡航偏大，会使2.0级持续加速至80 km/h以上；仅在本项目中
+    // 按低级位巡航工况标定，使1.0级缓慢降速、2.0级约维持55～60 km/h、
+    // 3.0级可平缓恢复，不影响既有发车和贯通试验项目。
+    const powerTrainingTractionFactor = s.trainingScope === 'power-training' ? .24 : 1;
     const notchSixSpeedFactor = continuityPhaseActive(s) && s.traction === 6
       ? clamp(
         (ROUTE_TRAINING_PROFILE.continuity.notchSixHardLimitKmh - s.speed)
@@ -1025,8 +1030,13 @@ export class TrainSimulation {
       : 1;
     s.tractionForce = tractionAllowed && s.actualTraction > 0
       ? Math.min(TRAIN_DYNAMICS.maxStartingTractiveEffortN, s.actualTraction * TRAIN_DYNAMICS.tractionForcePerNotchN)
-        * normalSpeedPowerFactor * notchSixSpeedFactor
+        * normalSpeedPowerFactor * notchSixSpeedFactor * powerTrainingTractionFactor
       : 0;
+    const tractionCurrentTarget = tractionAllowed && s.actualTraction > 0
+      ? Math.min(900, s.actualTraction * 105)
+      : 0;
+    if (tractionCurrentTarget <= 0) s.tractionCurrent = 0;
+    else s.tractionCurrent += (tractionCurrentTarget - s.tractionCurrent) * Math.min(1, dt * 3.2);
     if (s.tractionForce >= 10000) {
       s.tractionCurrentRising = true;
       if (!s.tractionPowerEstablished) {
