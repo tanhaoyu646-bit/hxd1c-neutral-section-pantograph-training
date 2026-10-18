@@ -1,6 +1,6 @@
 import * as THREE from '../lib/three/three.module.js';
 import { MstsRouteScene } from './mstsRouteScene.js';
-import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js';
+import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=route-buffer-v6';
 
 const POWER_SIGN_ASSET_URLS = Object.freeze({
   duan: new URL('../assets/power-signs/duan.json', import.meta.url).href,

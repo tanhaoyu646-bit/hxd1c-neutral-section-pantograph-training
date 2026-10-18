@@ -6,9 +6,9 @@ import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './cred
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js';
-import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js';
-import { PowerTrainingScene } from './powerTrainingScene.js?rev=sign-visibility-v5';
+import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js?rev=route-buffer-v6';
+import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js?rev=route-buffer-v6';
+import { PowerTrainingScene } from './powerTrainingScene.js?rev=route-buffer-v6';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();
