@@ -12,6 +12,8 @@ const POWER_SIGN_ASSET_URLS = Object.freeze({
   'zhunbei-jianggong': new URL('../assets/power-signs/zhunbei-jianggong.json', import.meta.url).href,
   'k-zhunbei-jianggong': new URL('../assets/power-signs/k-zhunbei-jianggong.json', import.meta.url).href,
 });
+const POWER_SIGN_REVEAL_DISTANCE = 420;
+const POWER_SIGN_HIDE_BEHIND_DISTANCE = 55;
 
 async function loadPowerSignAssets() {
   return Object.fromEntries(await Promise.all(Object.entries(POWER_SIGN_ASSET_URLS).map(async ([id, url]) => {
@@ -204,6 +206,7 @@ export class PowerTrainingScene extends MstsRouteScene {
   addBoard(text, distance, lateral, backText = text, options = {}) {
     const board = makeBoard(text, backText, options);
     board.name = `POWER_SIGN_${text}_${distance}`;
+    board.userData.powerDistance = distance;
     board.scale.setScalar(1.5);
     board.userData.displayScale = 1.5;
     this.placeLookoutObject3D(board, distance, lateral);
@@ -224,9 +227,11 @@ export class PowerTrainingScene extends MstsRouteScene {
     root.userData.source = 'JINGGUANG original MSTS shape';
     root.userData.frontAsset = frontAssetId;
     root.userData.backAsset = backAssetId;
+    root.userData.powerDistance = distance;
     const front = this.createSourcePowerSign(frontAssetId, `${root.name}_FRONT`);
     const back = this.createSourcePowerSign(backAssetId, `${root.name}_BACK`);
     front.position.z = -0.012;
+    front.rotation.y = 0;
     back.position.z = 0.012;
     back.rotation.y = Math.PI;
     root.add(front, back);
@@ -243,6 +248,7 @@ export class PowerTrainingScene extends MstsRouteScene {
     const board = makeDiamondBoard();
     board.name = `POWER_SIGN_T_BREAK_${distance}`;
     board.userData.source = 'source-style supplement; no standalone T-break shape exists in JINGGUANG';
+    board.userData.powerDistance = distance;
     board.scale.setScalar(1.65);
     board.userData.displayScale = 1.65;
     this.placeLookoutObject3D(board, distance, lateral);
@@ -298,6 +304,15 @@ export class PowerTrainingScene extends MstsRouteScene {
 
   update(distance, speed, view = this.view, signalVisible = false, wholeTrainStartFraction = 1) {
     super.update(distance, speed, view, signalVisible, wholeTrainStartFraction);
+    // 原线路标志模型的可视距离很远；若所有牌面从起点同时出现，曲线外侧
+    // 较大的“合”标可能先于更近的T断标被看到。按司机前方有效观察范围
+    // 分批显示，既保留原游戏正反牌面，也保证视觉顺序与里程顺序一致。
+    for (const object of this.powerRoot?.children || []) {
+      const markerDistance = Number(object.userData?.powerDistance);
+      if (!Number.isFinite(markerDistance)) continue;
+      const ahead = markerDistance - distance;
+      object.visible = ahead >= -POWER_SIGN_HIDE_BEHIND_DISTANCE && ahead <= POWER_SIGN_REVEAL_DISTANCE;
+    }
     const now = performance.now() / 1000;
     const hazard = this.powerVisuals.hazard;
     if (hazard) {

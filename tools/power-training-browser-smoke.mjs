@@ -48,7 +48,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, dev
 await send('Page.navigate', { url });
 await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&document.querySelector('.sprite.traction')){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('完整驾驶台项目初始化超时'))}},100)})`, true);
 
-const summary = await evaluate(`(()=>{const names=[];let reverseSourceSigns=0;let scaledSourceSigns=0;window.__routeScene.routeRoot.traverse((object)=>{if(object.name)names.push(object.name);if(object.userData?.backAsset&&object.children.some((child)=>child.name.endsWith('_BACK')&&Math.abs(child.rotation.y-Math.PI)<.001))reverseSourceSigns+=1;if(object.userData?.backAsset&&object.scale.x>=1.9&&object.scale.y>=1.6)scaledSourceSigns+=1});const s=window.__trainingSim.state;return{
+const summary = await evaluate(`(()=>{const names=[];let correctlyOrientedSourceSigns=0;let scaledSourceSigns=0;window.__routeScene.routeRoot.traverse((object)=>{if(object.name)names.push(object.name);if(object.userData?.backAsset&&object.children.some((child)=>child.name.endsWith('_FRONT')&&Math.abs(child.rotation.y)<.001)&&object.children.some((child)=>child.name.endsWith('_BACK')&&Math.abs(child.rotation.y-Math.PI)<.001))correctlyOrientedSourceSigns+=1;if(object.userData?.backAsset&&object.scale.x>=1.9&&object.scale.y>=1.6)scaledSourceSigns+=1});const s=window.__trainingSim.state;const prematurelyVisiblePowerSigns=window.__routeScene.powerRoot.children.filter((object)=>Number.isFinite(Number(object.userData?.powerDistance))&&object.visible&&Number(object.userData.powerDistance)-s.distance>420).map((object)=>object.name);return{
   title:document.title,app:document.body.dataset.trainingApp,mode:s.trainingMode,scope:s.trainingScope,
   speed:Math.round(s.speed),rearPantograph:s.rearPantograph,frontPantograph:s.frontPantograph,compressor:s.compressorSwitch,
   handles:['auto-brake','independent-brake','traction','direction'].every((name)=>document.querySelector('.sprite.'+name)),
@@ -62,7 +62,8 @@ const summary = await evaluate(`(()=>{const names=[];let reverseSourceSigns=0;le
   railFadeRanges:window.__routeScene.railVisibilityMaterials.map((material)=>[material.uniforms.nearFadeStart.value,material.uniforms.nearFadeEnd.value]),
   powerSigns:names.filter((name)=>name.startsWith('POWER_SIGN_')).length,
   sourceSignRoots:names.filter((name)=>name.startsWith('POWER_SIGN_')&&name.endsWith('_FRONT')).length,
-  reverseSourceSigns,
+  correctlyOrientedSourceSigns,
+  prematurelyVisiblePowerSigns,
   scaledSourceSigns,
   incorrectPreviewSigns:names.some((name)=>name.startsWith('POWER_SIGN_NEUTRAL_PREVIEW_')),
   tBreakFaces:['T_BREAK_FRONT','T_BREAK_BACK'].every((name)=>names.includes(name)),
@@ -95,7 +96,8 @@ assert.equal(summary.railSideLayer, true);
 assert(summary.railFadeRanges.every(([start,end])=>start>=40&&start<=90&&end>=110&&end<=180));
 assert.equal(summary.powerSigns, 20);
 assert.equal(summary.sourceSignRoots, 6);
-assert.equal(summary.reverseSourceSigns, 6);
+assert.equal(summary.correctlyOrientedSourceSigns, 6);
+assert.deepEqual(summary.prematurelyVisiblePowerSigns, []);
 assert.equal(summary.scaledSourceSigns, 6);
 assert.equal(summary.incorrectPreviewSigns, false);
 assert.equal(summary.tBreakFaces, true);
