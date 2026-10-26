@@ -11,6 +11,9 @@ const TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrai
 const LOOKOUT_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrain-native.json', import.meta.url).href;
 const LOOKOUT_PREFAB_PATH = new URL('../assets/msts-neiyi-corridor/lookout-source-prefabs.json', import.meta.url).href;
 const LOOKOUT_REPAIR_ASSET_PATH = new URL('../assets/msts-neiyi-corridor/lookout-repair-assets.json', import.meta.url).href;
+const POWER_SOURCE_PATH = new URL('../assets/msts-neiyi-corridor/power-training-scene.json?rev=candidate-load-v10', import.meta.url).href;
+const POWER_ROUTE_PATH = new URL('../assets/msts-neiyi/power-training-path.json?rev=candidate-load-v10', import.meta.url).href;
+const POWER_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/power-training-terrain-129.json?rev=candidate-load-v10', import.meta.url).href;
 const TEXTURE_PATH = new URL('../assets/msts-neiyi-corridor/textures/', import.meta.url).href;
 // GitHub Pages 区分大小写；原游戏导出中的三处引用大小写与发布文件名不同。
 const TEXTURE_FILE_ALIASES = Object.freeze({
@@ -67,6 +70,7 @@ export class MstsRouteScene {
     this.eyeHeight = 3.82;
     this.ready = false;
     this.error = null;
+    this.loadProgress = { percent: 5, stage: '正在初始化三维线路' };
     this.routePoints = [];
     this.routeDistances = [];
     this.pathLength = 0;
@@ -99,6 +103,15 @@ export class MstsRouteScene {
     this.resize();
   }
 
+  setLoadProgress(percent, stage) {
+    this.loadProgress = { percent, stage };
+    this.canvas.dispatchEvent(new CustomEvent('route-load-progress', { detail: this.loadProgress }));
+  }
+
+  yieldToBrowser() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   addEnvironment() {
     this.scene.add(new THREE.HemisphereLight('#eaf6ff', '#687264', 2.0));
     const sun = new THREE.DirectionalLight('#fff2d8', 2.4);
@@ -118,21 +131,24 @@ export class MstsRouteScene {
 
   async load() {
     try {
+      this.setLoadProgress(10, '正在下载线路与地形数据');
+      const fetchOptions = this.isPowerTraining ? { cache: 'force-cache' } : { cache: 'no-store' };
       const requests = [
-        fetch(SOURCE_PATH, { cache: 'no-store' }),
-        fetch(ROUTE_PATH, { cache: 'no-store' }),
-        fetch(this.isCorridor ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
+        fetch(this.isPowerTraining ? POWER_SOURCE_PATH : SOURCE_PATH, fetchOptions),
+        fetch(this.isPowerTraining ? POWER_ROUTE_PATH : ROUTE_PATH, fetchOptions),
+        fetch(this.isPowerTraining ? POWER_TERRAIN_PATH : this.isCorridor ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, fetchOptions),
       ];
-      if (this.isCorridor) {
-        requests.push(fetch(LOOKOUT_PREFAB_PATH, { cache: 'no-store' }));
-        requests.push(fetch(LOOKOUT_REPAIR_ASSET_PATH, { cache: 'no-store' }));
+      if (this.isLookout) {
+        requests.push(fetch(LOOKOUT_PREFAB_PATH, fetchOptions));
+        requests.push(fetch(LOOKOUT_REPAIR_ASSET_PATH, fetchOptions));
       }
       const [sceneResponse, pathResponse, terrainResponse, prefabResponse, repairAssetResponse] = await Promise.all(requests);
+      this.setLoadProgress(34, '线路数据下载完成，正在校验资源');
       if (!sceneResponse.ok) throw new Error(`路线场景加载失败：HTTP ${sceneResponse.status}`);
       if (!pathResponse.ok) throw new Error(`轨道中心线加载失败：HTTP ${pathResponse.status}`);
       if (!terrainResponse.ok) throw new Error(`原线路地形加载失败：HTTP ${terrainResponse.status}`);
-      if (this.isCorridor && !prefabResponse?.ok) throw new Error(`原线路素材加载失败：HTTP ${prefabResponse?.status}`);
-      if (this.isCorridor && !repairAssetResponse?.ok) throw new Error(`原游戏补充素材加载失败：HTTP ${repairAssetResponse?.status}`);
+      if (this.isLookout && !prefabResponse?.ok) throw new Error(`原线路素材加载失败：HTTP ${prefabResponse?.status}`);
+      if (this.isLookout && !repairAssetResponse?.ok) throw new Error(`原游戏补充素材加载失败：HTTP ${repairAssetResponse?.status}`);
       const [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all([
         sceneResponse.json(),
         pathResponse.json(),
@@ -140,6 +156,8 @@ export class MstsRouteScene {
         prefabResponse?.json() || null,
         repairAssetResponse?.json() || null,
       ]);
+      this.setLoadProgress(52, '正在解析教学线路');
+      await this.yieldToBrowser();
       if (repairAssetData?.shapes?.['tongguo.s']) {
         repairAssetData.shapes['tongguo.s'].materials.forEach((material) => {
           if (material.texture === 'Sign.png') material.texture = 'throughSignalSign.png';
@@ -149,11 +167,17 @@ export class MstsRouteScene {
       if (this.isCorridor) {
         // 本务线钢轨在加载时已经覆盖完整 TrackDB 路径；远裁剪面也必须覆盖同一范围，
         // 不能再用旧版 3 km 视距把实际存在的三维钢轨截掉。
-        this.camera.far = Math.max(50_000, Math.ceil(this.pathLength + 1_000));
+        this.camera.far = this.isPowerTraining
+          ? Math.max(10_000, Math.ceil(this.pathLength + 1_000))
+          : Math.max(50_000, Math.ceil(this.pathLength + 1_000));
         this.camera.userData.fullRouteFarPlane = true;
         this.camera.updateProjectionMatrix();
       }
+      this.setLoadProgress(62, '正在生成线路地形');
+      await this.yieldToBrowser();
       this.buildTerrain(terrainData);
+      this.setLoadProgress(76, '正在布置线路环境');
+      await this.yieldToBrowser();
       this.buildRoute(sceneData);
       this.buildPassengerConsist(12);
       // 瞭望项目的本务主线在加载时一次性生成到 TrackDB 路径终点。
@@ -168,6 +192,8 @@ export class MstsRouteScene {
       if (this.renderOptions.sourceDepartureSignal && !this.isPowerTraining) this.buildSourceDepartureSignal(sceneData);
       if (!this.isPowerTraining) this.buildSourceRouteSignalLights(sceneData);
       if (this.isLookout) this.buildLookoutTrainingScenery(sceneData, prefabData, repairAssetData);
+      this.setLoadProgress(94, '正在完成钢轨与接触网');
+      await this.yieldToBrowser();
       this.ready = true;
       this.applyCamera();
       this.canvas.dispatchEvent(new CustomEvent('route-ready', {
@@ -476,7 +502,9 @@ export class MstsRouteScene {
     // 原中心线只包含轨道构件连接点。直接线性插值会在曲线连接处走弦线，
     // 驾驶视点离开站场后看起来会切出钢轨。使用相邻真实 TrackObj 的朝向
     // 构造 Hermite 中心线，并以约5 m间距重采样，使位置和朝向连续贴合线路。
-    const alignedPoints = buildRailAlignedPath(data.positions, sceneData?.instances, { spacing: 5 });
+    const alignedPoints = data?.source?.preAligned
+      ? Array.from({ length: data.positions.length / 3 }, (_, index) => data.positions.slice(index * 3, index * 3 + 3))
+      : buildRailAlignedPath(data.positions, sceneData?.instances, { spacing: 5 });
     this.routePoints = alignedPoints.map((point) => new THREE.Vector3(...point));
     this.routeDistances = cumulativePathDistances(alignedPoints);
     this.pathLength = this.routeDistances[this.routeDistances.length - 1];

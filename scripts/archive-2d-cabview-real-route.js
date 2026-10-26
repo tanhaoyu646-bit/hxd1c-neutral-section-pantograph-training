@@ -1,14 +1,15 @@
 import { TrainSimulation } from './dynamics.js?rev=power-physics-v31';
 import { getProcedure, procedureState, scoreRun } from './procedure.js?rev=notch-timing-v30';
-import { MstsRouteScene } from './mstsRouteScene.js?rev=mobile-rail-v9';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=candidate-load-v10';
 import { LKJ_FIELD_DEFINITIONS, LKJ_TRAINING_PARAMETERS, RUNNING_NOTICES, SIGNAL_ASPECTS, TRAIN_DYNAMICS, SMOOTH_START_TERRAINS, getSmoothStartTerrain } from './scenario.js?rev=notch-timing-v30';
 import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './credentialScenario.js?rev=smooth-start-v19-cir-incoming-clickfix';
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js?rev=mobile-rail-v9';
-import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js?rev=mobile-rail-v9';
-import { PowerTrainingScene } from './powerTrainingScene.js?rev=mobile-rail-v9';
+import { PowerTrainingAssessment, powerSceneScores } from './powerTrainingAssessment.js?rev=candidate-load-v10';
+import { POWER_SCORING, POWER_TRAINING_CONFIG, chooseHazard } from './powerTrainingConfig.js?rev=candidate-load-v10';
+import { PowerTrainingScene } from './powerTrainingScene.js?rev=candidate-load-v10';
+import { clearCandidateDraft, createCandidateAttempt, formatAttemptTime, loadCandidateDraft, saveCandidateDraft, validateCandidate } from './powerTrainingCandidate.js?rev=candidate-load-v10';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();
@@ -87,6 +88,11 @@ const lookoutAssessment = TRAINING_APP === 'lookout' ? new LookoutAssessment(sim
 const powerAssessment = IS_POWER_APP ? new PowerTrainingAssessment(sim.state) : null;
 const powerHazard = IS_POWER_APP ? chooseHazard() : null;
 if(IS_POWER_APP)sim.state.hazard=powerHazard;
+let assessmentStarted=!IS_POWER_APP;
+let candidateAttempt=null;
+let candidateRouteReady=!IS_POWER_APP;
+let candidateCabReady=!IS_POWER_APP;
+let candidateLoadFailed=false;
 const overlay = $('#overlay');
 const routeCanvas = $('#route-scene');
 const routeScene = IS_POWER_APP
@@ -101,8 +107,9 @@ routeCanvas.addEventListener('route-error',(event)=>{
 });
 // route-error 已在页面提示，防止被浏览器重复报告为未处理的 Promise。
 routeScene.loadPromise.catch(()=>{});
+if(IS_POWER_APP)setupCandidateGate();
 const views = {
-  front: 'HXD1C_front.png',
+  front: IS_POWER_APP ? 'HXD1C_front.webp' : 'HXD1C_front.png',
   left: 'HXD1C_left_full.png',
   right: 'HXD1C_right_full.png',
   rearLeft: 'HXD1C_left.png',
@@ -149,7 +156,7 @@ const stationAudio = {
   greenPermit: new Audio(scenarioAudioPath('greenPermit')),
   departure: new Audio(scenarioAudioPath('weather')),
 };
-Object.values(stationAudio).forEach((audio)=>{audio.preload='auto';});
+Object.values(stationAudio).forEach((audio)=>{audio.preload=IS_POWER_APP?'none':'auto';});
 const switchDefs = [
   { id:'main-breaker', label:'主断路器', type:'short', x:15.6, read:s=>IS_POWER_APP?s.mainBreakerSwitch:s.mainBreaker, on:'合', off:'分', directional:true, positions:IS_POWER_APP?['close','zero','open']:null, positionLabels:{close:'合',zero:'0',open:'分'}, initialCheck:'mainBreaker' },
   { id:'panto', label:'受电弓', type:'short', x:24.1, read:s=>IS_POWER_APP?s.pantographSwitch:s.panto, on:'升', off:'降', directional:true, positions:IS_POWER_APP?['up','zero','down']:null, positionLabels:{up:'升',zero:'0',down:'降'}, initialCheck:'panto' },
@@ -167,6 +174,55 @@ function powerStageLabel(distance){
   if(distance<p.preview)return '区间恢复运行';
   if(distance<=p.restoreEnd)return '临时升降弓与接触网异物处置';
   return distance<POWER_TRAINING_CONFIG.finishDistance?'驶向考核终点':'考核完成';
+}
+function setCandidateLoadProgress(percent,stage){
+  const progress=$('#candidate-load-progress');const value=$('#candidate-load-value');const label=$('#candidate-load-stage');
+  const bounded=Math.max(0,Math.min(100,Math.round(Number(percent)||0)));
+  if(progress){progress.value=bounded;progress.textContent=`${bounded}%`;}
+  if(value)value.textContent=`${bounded}%`;
+  if(label&&stage)label.textContent=stage;
+}
+function updateCandidateGate(){
+  if(!IS_POWER_APP)return;
+  const name=$('#candidate-name');const studentId=$('#candidate-student-id');const submit=$('#candidate-submit');const error=$('#candidate-error');
+  const validation=validateCandidate({name:name?.value,studentId:studentId?.value});
+  name?.setAttribute('aria-invalid',String(Boolean(name?.value)&&validation.field==='name'));
+  studentId?.setAttribute('aria-invalid',String(Boolean(studentId?.value)&&validation.field==='studentId'));
+  if(error&&!candidateLoadFailed)error.textContent=(name?.value||studentId?.value)&&!validation.valid?validation.message:'';
+  const ready=candidateRouteReady&&candidateCabReady&&!candidateLoadFailed;
+  if(ready&&!performance.getEntriesByName?.('power-training-resource-ready').length)performance.mark?.('power-training-resource-ready');
+  if(submit){submit.disabled=!ready||!validation.valid;submit.textContent=candidateLoadFailed?'资源加载失败':!ready?'资源加载中':validation.valid?'进入考核':'请填写姓名和学号';}
+}
+function setupCandidateGate(){
+  const form=$('#candidate-form');const name=$('#candidate-name');const studentId=$('#candidate-student-id');const cab=$('#cab');
+  if(!form||!name||!studentId||!cab)return;
+  const draft=loadCandidateDraft();name.value=draft.name;studentId.value=draft.studentId;
+  routeCanvas.addEventListener('route-load-progress',(event)=>{
+    const detail=event.detail||{};setCandidateLoadProgress(detail.percent||5,detail.stage||'正在准备线路资源');
+  });
+  routeCanvas.addEventListener('route-error',(event)=>{
+    candidateLoadFailed=true;setCandidateLoadProgress(0,'考核环境加载失败');
+    const error=$('#candidate-error');if(error)error.textContent=event.detail?.message||'线路资源加载失败，请刷新页面重试。';updateCandidateGate();
+  });
+  if(routeScene.loadProgress)setCandidateLoadProgress(routeScene.loadProgress.percent,routeScene.loadProgress.stage);
+  routeScene.loadPromise.then(()=>{candidateRouteReady=true;setCandidateLoadProgress(candidateCabReady?100:97,candidateCabReady?'考核环境准备完成':'正在准备驾驶台');updateCandidateGate();}).catch(()=>{});
+  const cabReady=typeof cab.decode==='function'?cab.decode():new Promise((resolve,reject)=>{if(cab.complete&&cab.naturalWidth)resolve();else{cab.addEventListener('load',resolve,{once:true});cab.addEventListener('error',reject,{once:true});}});
+  cabReady.then(()=>{candidateCabReady=true;setCandidateLoadProgress(candidateRouteReady?100:Math.max(8,Number($('#candidate-load-progress')?.value)||8),candidateRouteReady?'考核环境准备完成':'驾驶台已完成，正在准备线路');updateCandidateGate();}).catch(()=>{
+    candidateLoadFailed=true;setCandidateLoadProgress(0,'驾驶台加载失败');const error=$('#candidate-error');if(error)error.textContent='驾驶台图片加载失败，请刷新页面重试。';updateCandidateGate();
+  });
+  for(const input of [name,studentId])input.addEventListener('input',updateCandidateGate);
+  form.addEventListener('submit',async(event)=>{
+    event.preventDefault();if(!candidateRouteReady||!candidateCabReady||candidateLoadFailed)return;
+    const validation=validateCandidate({name:name.value,studentId:studentId.value});
+    if(!validation.valid){const target=validation.field==='name'?name:studentId;target?.focus();const error=$('#candidate-error');if(error)error.textContent=validation.message;updateCandidateGate();return;}
+    saveCandidateDraft(validation.candidate);candidateAttempt=createCandidateAttempt(validation.candidate);sim.state.candidateAttempt=candidateAttempt;sim.state.elapsed=0;assessmentStarted=true;
+    performance.mark?.('power-training-assessment-start');
+    $('#candidate-gate').hidden=true;document.body.classList.remove('candidate-entry-active');
+    for(const child of document.body.children)if(child.id!=='candidate-gate'&&child.tagName!=='SCRIPT')child.inert=false;
+    sim.emit(`${candidateAttempt.name}同学，考核环境准备完成。`);syncMobileViewport();
+    if(mobileLike)await enterImmersive();else routeScene.resize();
+  });
+  updateCandidateGate();
 }
 function speakAssistant(message=''){
   if(!message||!('speechSynthesis' in window))return;
@@ -274,6 +330,7 @@ function syncPowerStateAliases(state){
   state.lineVoltage=state.netVoltage>=19;
 }
 function command(id,value) {
+  if(IS_POWER_APP&&!assessmentStarted)return false;
   const s=sim.state;
   const previousPowerState=IS_POWER_APP?{previousMainBreaker:Boolean(s.mainBreaker)}:null;
   if(id==='direction'&&value===undefined)value=s.direction==='N'?'F':s.direction==='F'?'R':'N';
@@ -849,13 +906,21 @@ function syncTrainingControls(state){
 function buildResultReport(){
   const root=document.createElement('div');root.className='device-modal result-modal';root.setAttribute('aria-hidden','true');
   const title=IS_POWER_APP?'途中过分相+升降弓考核成绩单':TRAINING_APP==='lookout'?'K2026次途中瞭望技巧虚拟仿真成绩单':TRAINING_APP==='continuity'?'K2026次平稳起车与贯通试验成绩单':'K2026次平稳起动考评成绩单';
-  root.innerHTML=`<div class="device-shell result-shell" role="dialog" aria-modal="true" aria-label="${title}"><div class="device-head"><div><strong>${title}</strong><span>课堂训练结果，不作为实际作业记录</span></div><button type="button" class="device-close" aria-label="关闭成绩单">×</button></div><div class="result-body"><div class="result-score"><b data-result-score>0</b><span>分</span></div><p data-result-summary></p><ol data-result-items></ol><button type="button" class="result-close">完成查看</button></div></div>`;
+  const candidateMeta=IS_POWER_APP?'<div class="result-candidate"><span>姓名<b data-result-name>—</b></span><span>学号<b data-result-student-id>—</b></span><span>开始时间<b data-result-started-at>—</b></span><span>结束时间<b data-result-finished-at>—</b></span></div>':'';
+  const resultActions=IS_POWER_APP?'<div class="result-actions"><button type="button" class="result-close">完成查看</button><button type="button" class="result-change-candidate">更换学员</button></div>':'<button type="button" class="result-close">完成查看</button>';
+  root.innerHTML=`<div class="device-shell result-shell" role="dialog" aria-modal="true" aria-label="${title}"><div class="device-head"><div><strong>${title}</strong><span>课堂训练结果，不作为实际作业记录</span></div><button type="button" class="device-close" aria-label="关闭成绩单">×</button></div><div class="result-body">${candidateMeta}<div class="result-score"><b data-result-score>0</b><span>分</span></div><p data-result-summary></p><ol data-result-items></ol>${resultActions}</div></div>`;
   const close=()=>{root.classList.remove('open');root.setAttribute('aria-hidden','true');document.body.classList.remove('device-panel-active');};root.querySelector('.device-close').addEventListener('click',close);root.querySelector('.result-close').addEventListener('click',close);root.addEventListener('click',(event)=>{if(event.target===root)close();});document.body.append(root);resultRoot=root;
+  root.querySelector('.result-change-candidate')?.addEventListener('click',()=>{clearCandidateDraft();location.reload();});
 }
 function showResultReport(state){
   if(state.trainingMode!=='assessment'||resultShown)return;if(!resultRoot)buildResultReport();
   if(IS_POWER_APP){
     const score=powerSceneScores(state.assessment);const incidents=state.assessment.incidents||[];
+    const identity=state.candidateAttempt||candidateAttempt||{};
+    resultRoot.querySelector('[data-result-name]').textContent=identity.name||'—';
+    resultRoot.querySelector('[data-result-student-id]').textContent=identity.studentId||'—';
+    resultRoot.querySelector('[data-result-started-at]').textContent=formatAttemptTime(identity.startedAt);
+    resultRoot.querySelector('[data-result-finished-at]').textContent=formatAttemptTime(new Date());
     resultRoot.querySelector('[data-result-score]').textContent=score.total;
     resultRoot.querySelector('[data-result-summary]').textContent=`手动过分相 ${score.neutral}/60分，升降弓与异物处置 ${score.pantograph}/40分${incidents.length?`；安全关键错误 ${incidents.length} 项`:'；无安全关键错误'}。`;
     resultRoot.querySelector('[data-result-items]').innerHTML=[...POWER_SCORING.neutral,...POWER_SCORING.pantograph].map((item)=>`<li class="${state.assessment.checks[item.id]?'pass':'fail'}"><span>${item.label}</span><b>${state.assessment.checks[item.id]?item.points:0}/${item.points}</b></li>`).join('');
@@ -1180,7 +1245,7 @@ function syncMobileViewport(){
   // 等比计算最大宽度，避免底部两排实体键（尤其“确认”键）落到屏幕外。
   const lkjVerticalReserve=mobileLike?8:96;
   root.style.setProperty('--lkj-fit-width',`${Math.max(1,Math.floor((visualHeight-lkjVerticalReserve)*800/615))}px`);
-  if(mobileLike&&!mobileEntered)$('#landscape-gate').hidden=false;
+  if(mobileLike&&!mobileEntered&&(!IS_POWER_APP||assessmentStarted))$('#landscape-gate').hidden=false;
 }
 syncMobileViewport();
 async function enterImmersive(){
@@ -1207,6 +1272,6 @@ window.visualViewport?.addEventListener('resize',()=>{syncMobileViewport();route
 window.visualViewport?.addEventListener('scroll',syncMobileViewport);
 addEventListener('pointerup',stopHorn,true);addEventListener('pointercancel',stopHorn,true);addEventListener('pointerup',stopSideRelease,true);addEventListener('pointercancel',stopSideRelease,true);addEventListener('blur',()=>{stopHorn();stopSideRelease();});addEventListener('pagehide',()=>{stopHorn();stopSideRelease();});document.addEventListener('visibilitychange',()=>{if(document.hidden){stopHorn();stopSideRelease();}});
 $('#stage').addEventListener('click',(event)=>{if(selectedView!=='front'||document.body.classList.contains('device-panel-active')||document.body.classList.contains('switch-panel-active'))return;if(routeScene.hitTestDepartureSignal(event.clientX,event.clientY))openSignalInspection();});
-$('#callout-button')?.addEventListener('click',()=>{const message=powerAssessment?.recordAction('callout',true,sim.state)||'';if(message){sim.emit(message);speakAssistant(message);}});
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{setMetricsPanel(false);setViewPanel(false);setView(b.dataset.view);}));buildSwitchPanel();buildLkj();buildTrainingControls();buildKeys();bindDrag();bindControlDrawers();bindMetricsPanel();bindViewPanel();setMetricsPanel(false);setViewPanel(false);setView('front');sim.onChange(render);let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);if(IS_POWER_APP){if(!sim.state.assessment.finished){const inNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(inNeutral)sim.state.netVoltage=0;sim.tick(dt,selectedView);const nowInNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(nowInNeutral)sim.state.netVoltage=0;syncPowerStateAliases(sim.state);powerAssessment.update(sim.state);if(sim.state.assessment.finished&&!sim.state.completed){sim.state.completed=true;sim.emit('考核终点到达，成绩已封存。');}}}else sim.tick(dt,selectedView);if(lookoutAssessment){const message=lookoutAssessment.update(sim.state);if(message)sim.emit(message);routeScene.updateLookoutTraining?.(sim.state.lookout,sim.state.distance);}updateCirPressure(dt);routeScene.render();last=now;requestAnimationFrame(loop)}requestAnimationFrame(loop);
+$('#callout-button')?.addEventListener('click',()=>{if(IS_POWER_APP&&!assessmentStarted)return;const message=powerAssessment?.recordAction('callout',true,sim.state)||'';if(message){sim.emit(message);speakAssistant(message);}});
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{setMetricsPanel(false);setViewPanel(false);setView(b.dataset.view);}));buildSwitchPanel();buildLkj();buildTrainingControls();buildKeys();bindDrag();bindControlDrawers();bindMetricsPanel();bindViewPanel();setMetricsPanel(false);setViewPanel(false);setView('front');sim.onChange(render);let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);if(IS_POWER_APP){if(assessmentStarted&&!sim.state.assessment.finished){const inNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(inNeutral)sim.state.netVoltage=0;sim.tick(dt,selectedView);const nowInNeutral=sim.state.distance>=POWER_TRAINING_CONFIG.neutral.sectionStart&&sim.state.distance<=POWER_TRAINING_CONFIG.neutral.sectionEnd;if(nowInNeutral)sim.state.netVoltage=0;syncPowerStateAliases(sim.state);powerAssessment.update(sim.state);if(sim.state.assessment.finished&&!sim.state.completed){sim.state.completed=true;sim.emit('考核终点到达，成绩已封存。');}}}else sim.tick(dt,selectedView);if(lookoutAssessment){const message=lookoutAssessment.update(sim.state);if(message)sim.emit(message);routeScene.updateLookoutTraining?.(sim.state.lookout,sim.state.distance);}updateCirPressure(dt);routeScene.render();last=now;requestAnimationFrame(loop)}requestAnimationFrame(loop);
 

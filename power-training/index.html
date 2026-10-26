@@ -10,24 +10,44 @@
   <link rel="stylesheet" href="./styles/smooth-start.css?rev=power-cab-v2">
   <link rel="stylesheet" href="./styles/credential-training.css?rev=power-cab-v2">
   <link rel="stylesheet" href="./styles/continuity-test.css?rev=power-cab-v2">
-  <link rel="stylesheet" href="./styles/power-training-overrides.css?rev=power-physics-v3">
+  <link rel="preload" href="./assets/archive-cabview/HXD1C_front.webp" as="image" type="image/webp">
+  <link rel="stylesheet" href="./styles/power-training-overrides.css?rev=candidate-load-v10">
 </head>
-<body data-training-app="power-training">
-  <div id="landscape-gate" class="landscape-gate" hidden aria-modal="true" role="dialog">
+<body data-training-app="power-training" class="candidate-entry-active">
+  <section id="candidate-gate" class="candidate-gate" role="dialog" aria-modal="true" aria-labelledby="candidate-title">
+    <form id="candidate-form" class="candidate-card" novalidate>
+      <div class="candidate-eyebrow">HXD1C · 独立课堂考核</div>
+      <h1 id="candidate-title">途中过分相+升降弓</h1>
+      <p class="candidate-intro">请先登记考生信息。线路、驾驶台和考核资源正在后台准备，资源完成后方可进入考核。</p>
+      <div class="candidate-fields">
+        <label><span>姓名</span><input id="candidate-name" name="candidateName" type="text" maxlength="20" autocomplete="name" enterkeyhint="next" placeholder="请输入姓名"></label>
+        <label><span>学号</span><input id="candidate-student-id" name="candidateStudentId" type="text" maxlength="20" autocomplete="off" inputmode="text" enterkeyhint="done" placeholder="请输入学号"></label>
+      </div>
+      <p id="candidate-error" class="candidate-error" aria-live="polite"></p>
+      <div class="candidate-load" aria-live="polite">
+        <div><span id="candidate-load-stage">正在初始化考核环境</span><b id="candidate-load-value">5%</b></div>
+        <progress id="candidate-load-progress" max="100" value="5">5%</progress>
+      </div>
+      <button id="candidate-submit" class="candidate-submit" type="submit" disabled>资源加载中</button>
+      <small>信息仅保存在当前浏览器标签页，不会上传到服务器；刷新页面将开始一轮新考核。</small>
+    </form>
+  </section>
+
+  <div id="landscape-gate" class="landscape-gate" hidden aria-modal="true" role="dialog" inert>
     <div class="landscape-card"><h2>横屏进入过分相与升降弓考核</h2><p>请将手机横向旋转，以便同时观察驾驶台、线路标志和操作状态。</p><button id="enter-training" type="button">进入考评</button></div>
   </div>
-  <div id="rotate-tip" class="rotate-tip">请将手机横向旋转后继续考评</div>
+  <div id="rotate-tip" class="rotate-tip" inert>请将手机横向旋转后继续考评</div>
 
-  <header class="topbar">
+  <header class="topbar" inert>
     <div><h1>途中过分相+升降弓</h1><p>手动过分相60分 · 临时升降弓及接触网异物处置40分 · 仅考核模式</p></div>
     <div class="header-actions"><a class="back-link" href="./">返回项目首页</a><div class="prototype-tag">独立课堂考核项目</div></div>
   </header>
 
-  <main class="app-shell">
+  <main class="app-shell" inert>
     <section class="workspace stage-wrap">
       <div class="stage" id="stage" aria-label="HXD1C完整驾驶台与途中过分相升降弓考核线路">
         <canvas id="route-scene" class="route-scene" aria-label="分相标志、临时升降弓标和接触网异物三维线路"></canvas>
-        <img id="cab" class="cab-layer" src="./assets/archive-cabview/HXD1C_front.png" alt="HXD1C原游戏完整驾驶台">
+        <img id="cab" class="cab-layer" src="./assets/archive-cabview/HXD1C_front.webp" alt="HXD1C原游戏完整驾驶台">
         <div id="overlay" class="overlay"></div>
         <div class="stage-toolbar">
           <button id="callout-button" class="callout-button" type="button">呼唤确认</button>
@@ -80,7 +100,7 @@
     </aside>
   </main>
 
-  <button id="workflow-scrim" class="drawer-backdrop workflow-scrim" type="button" aria-label="关闭侧栏"></button>
-  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=mobile-rail-v9"></script>
+  <button id="workflow-scrim" class="drawer-backdrop workflow-scrim" type="button" aria-label="关闭侧栏" inert></button>
+  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=candidate-load-v10"></script>
 </body>
 </html>

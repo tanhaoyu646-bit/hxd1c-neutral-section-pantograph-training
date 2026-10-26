@@ -1,23 +1,23 @@
 import * as THREE from '../lib/three/three.module.js';
-import { MstsRouteScene } from './mstsRouteScene.js?rev=mobile-rail-v9';
-import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=mobile-rail-v9';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=candidate-load-v10';
+import { POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=candidate-load-v10';
 
 const POWER_SIGN_ASSET_URLS = Object.freeze({
-  duan: new URL('../assets/power-signs/duan.json', import.meta.url).href,
-  he: new URL('../assets/power-signs/he.json', import.meta.url).href,
-  'jinzhi-shuanggong': new URL('../assets/power-signs/jinzhi-shuanggong.json', import.meta.url).href,
-  'k-jinzhi-shuanggong': new URL('../assets/power-signs/k-jinzhi-shuanggong.json', import.meta.url).href,
-  jiang: new URL('../assets/power-signs/jiang.json', import.meta.url).href,
-  sheng: new URL('../assets/power-signs/sheng.json', import.meta.url).href,
-  'zhunbei-jianggong': new URL('../assets/power-signs/zhunbei-jianggong.json', import.meta.url).href,
-  'k-zhunbei-jianggong': new URL('../assets/power-signs/k-zhunbei-jianggong.json', import.meta.url).href,
+  duan: new URL('../assets/power-signs/duan.json?rev=candidate-load-v10', import.meta.url).href,
+  he: new URL('../assets/power-signs/he.json?rev=candidate-load-v10', import.meta.url).href,
+  'jinzhi-shuanggong': new URL('../assets/power-signs/jinzhi-shuanggong.json?rev=candidate-load-v10', import.meta.url).href,
+  'k-jinzhi-shuanggong': new URL('../assets/power-signs/k-jinzhi-shuanggong.json?rev=candidate-load-v10', import.meta.url).href,
+  jiang: new URL('../assets/power-signs/jiang.json?rev=candidate-load-v10', import.meta.url).href,
+  sheng: new URL('../assets/power-signs/sheng.json?rev=candidate-load-v10', import.meta.url).href,
+  'zhunbei-jianggong': new URL('../assets/power-signs/zhunbei-jianggong.json?rev=candidate-load-v10', import.meta.url).href,
+  'k-zhunbei-jianggong': new URL('../assets/power-signs/k-zhunbei-jianggong.json?rev=candidate-load-v10', import.meta.url).href,
 });
 const POWER_SIGN_REVEAL_DISTANCE = 420;
 const POWER_SIGN_HIDE_BEHIND_DISTANCE = 55;
 
 async function loadPowerSignAssets() {
   return Object.fromEntries(await Promise.all(Object.entries(POWER_SIGN_ASSET_URLS).map(async ([id, url]) => {
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetch(url, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`原游戏线路标志加载失败：${id}（HTTP ${response.status}）`);
     return [id, await response.json()];
   })));
@@ -196,8 +196,10 @@ export class PowerTrainingScene extends MstsRouteScene {
     this.powerVisuals = {};
     const baseLoad = this.loadPromise;
     this.loadPromise = Promise.all([baseLoad, loadPowerSignAssets()]).then(([, powerSignAssets]) => {
+      this.setLoadProgress(97, '正在布置分相与升降弓标志');
       this.powerSignAssets = powerSignAssets;
       this.buildPowerTrainingScenery();
+      this.setLoadProgress(100, '考核环境准备完成');
       this.canvas.dispatchEvent(new CustomEvent('power-scene-ready', { detail: { hazard: this.hazardType } }));
       return this;
     });

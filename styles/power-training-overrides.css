@@ -19,6 +19,34 @@ body[data-training-app="power-training"] .power-score-group li em{float:right;co
 body[data-training-app="power-training"] .power-score-group li span{margin-top:3px;color:#87afc1;font-size:9px;line-height:1.45}
 body[data-training-app="power-training"] .power-physics-note{padding:9px;border:1px solid #76622c;border-radius:7px;background:#30270988;color:#dbc988;font-size:10px;line-height:1.55}
 
+body[data-training-app="power-training"].candidate-entry-active{overflow:hidden}
+.candidate-gate{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;min-height:100%;padding:max(18px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));overflow:auto;background:radial-gradient(circle at 50% 6%,#19465f 0,#071722 47%,#02080d 100%)}
+.candidate-gate[hidden]{display:none}
+.candidate-card{width:min(580px,94vw);padding:30px;border:1px solid #55b9df;border-radius:16px;background:#061827f2;box-shadow:0 24px 90px #000b,0 0 42px #208ecb38}
+.candidate-eyebrow{color:#73d9fa;font-size:11px;letter-spacing:.18em;text-transform:uppercase}
+.candidate-card h1{margin:7px 0 8px;font-size:29px}
+.candidate-intro{margin:0 0 18px;color:#a8cedf;font-size:13px;line-height:1.7}
+.candidate-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.candidate-fields label{display:grid;gap:6px;color:#c8e8f5;font-size:12px}
+.candidate-fields input{width:100%;height:46px;padding:0 12px;border:1px solid #397f9f;border-radius:8px;outline:none;background:#03111be8;color:#fff;font:16px/1.2 "Microsoft YaHei",sans-serif}
+.candidate-fields input:focus{border-color:#64d8ff;box-shadow:0 0 0 3px #2fbce52b}
+.candidate-fields input[aria-invalid="true"]{border-color:#f07982}
+.candidate-error{min-height:20px;margin:7px 0 3px;color:#ff9ba3;font-size:11px}
+.candidate-load{padding:11px 12px;border:1px solid #285f7b;border-radius:9px;background:#04131e}
+.candidate-load>div{display:flex;justify-content:space-between;gap:12px;margin-bottom:7px;color:#a9d1e1;font-size:11px}
+.candidate-load b{color:#73efb2}
+.candidate-load progress{display:block;width:100%;height:9px;overflow:hidden;border:0;border-radius:99px;background:#102c3a;accent-color:#56dfa3}
+.candidate-load progress::-webkit-progress-bar{background:#102c3a}.candidate-load progress::-webkit-progress-value{background:linear-gradient(90deg,#38a9d7,#56dfa3)}
+.candidate-submit{width:100%;min-height:47px;margin-top:14px;border:1px solid #5ee3a2;border-radius:8px;background:#116342;color:#fff;font-weight:700}
+.candidate-submit:disabled{cursor:wait;border-color:#456878;background:#17303b;color:#8faeba}
+.candidate-card>small{display:block;margin-top:10px;color:#7295a5;font-size:10px;line-height:1.55;text-align:center}
+body[data-training-app="power-training"] .result-candidate{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:8px 0 12px;padding:10px 12px;border:1px solid #2e627d;border-radius:8px;background:#061722}
+body[data-training-app="power-training"] .result-candidate span{display:flex;justify-content:space-between;gap:8px;color:#86adbf;font-size:11px}
+body[data-training-app="power-training"] .result-candidate b{color:#eaf9ff;font-weight:600;text-align:right}
+body[data-training-app="power-training"] .result-actions{display:flex;justify-content:center;gap:9px}
+body[data-training-app="power-training"] .result-actions button{padding:9px 18px;border-radius:7px}
+body[data-training-app="power-training"] .result-change-candidate{border:1px solid #d8ad56;background:#594316;color:#ffe4a0}
+
 /* 原实物照片式板钮面板只停靠在驾驶台下部，不再形成全屏遮罩。 */
 body[data-training-app="power-training"] .switch-panel-modal.power-switch-docked{
   position:absolute;
@@ -62,6 +90,26 @@ body[data-training-app="power-training"] .power-switch-docked .switch-name{font-
 }
 
 @media(orientation:landscape) and (max-height:620px){
+  .candidate-gate{align-items:start;height:var(--visual-height,100dvh);top:var(--visual-offset-top,0px);padding:max(6px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .candidate-card{width:min(880px,94vw);padding:12px 18px}
+  .candidate-card h1{margin:2px 0 3px;font-size:21px}.candidate-intro{margin-bottom:7px;font-size:10px;line-height:1.45}
+  .candidate-fields input{height:38px}.candidate-error{min-height:15px;margin:3px 0;font-size:9px}
+  .candidate-load{padding:6px 9px}.candidate-load>div{margin-bottom:4px;font-size:9px}.candidate-submit{min-height:38px;margin-top:7px}
+  .candidate-card>small{margin-top:5px;font-size:8px}
+  body[data-training-app="power-training"] .result-shell{height:calc(var(--visual-height,100dvh) - max(8px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));max-height:100%;display:flex;flex-direction:column}
+  body[data-training-app="power-training"] .result-shell .device-head{flex:none}
+  body[data-training-app="power-training"] .result-body{flex:1;min-height:0;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;overflow:hidden}
+  body[data-training-app="power-training"] .result-candidate{margin:2px 0 4px;padding:5px 8px;gap:2px 12px}
+  body[data-training-app="power-training"] .result-score{padding:0}.result-score b{font-size:38px}
+  body[data-training-app="power-training"] .result-body>p{margin:2px 0 4px;font-size:10px}
+  body[data-training-app="power-training"] .result-body ol{min-height:0;margin:2px 0 5px;overflow:auto}
+  body[data-training-app="power-training"] .result-actions{flex:none}
+  body[data-training-app="power-training"] .result-actions button{padding:6px 14px;font-size:10px}
   body[data-training-app="power-training"].mobile-controls-enabled .metrics-toggle{display:block}
   body[data-training-app="power-training"] .power-switch-docked .switch-panel-shell{width:min(720px,64%);max-height:54%}
+}
+
+@media(max-width:620px) and (orientation:portrait){
+  .candidate-gate{align-items:start;height:var(--visual-height,100dvh);top:var(--visual-offset-top,0px);padding-top:max(12px,env(safe-area-inset-top))}
+  .candidate-card{padding:19px}.candidate-card h1{font-size:24px}.candidate-fields{grid-template-columns:1fr}
 }

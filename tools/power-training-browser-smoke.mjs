@@ -44,14 +44,28 @@ async function evaluate(expression, awaitPromise = false) {
   if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
   return response.result.value;
 }
+async function fillCandidate(name = '测试学员', studentId = '20260001') {
+  await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(document.querySelector('#candidate-form')&&window.__trainingSim){clearInterval(timer);resolve(true)}else if(Date.now()-start>8000){clearInterval(timer);reject(new Error('考生信息登记界面初始化超时'))}},50)})`, true);
+  return evaluate(`(()=>{const name=document.querySelector('#candidate-name');const studentId=document.querySelector('#candidate-student-id');name.value=${JSON.stringify(name)};studentId.value=${JSON.stringify(studentId)};name.dispatchEvent(new Event('input',{bubbles:true}));studentId.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
+}
+async function submitCandidate() {
+  await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{const button=document.querySelector('#candidate-submit');if(button&&!button.disabled){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('考核资源准备超时'))}},80)})`, true);
+  await evaluate(`document.querySelector('#candidate-form').requestSubmit();true`);
+  await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(document.querySelector('#candidate-gate')?.hidden&&window.__trainingSim?.state?.candidateAttempt){clearInterval(timer);resolve(true)}else if(Date.now()-start>5000){clearInterval(timer);reject(new Error('考生信息提交后未进入考核'))}},50)})`, true);
+}
 
 await Promise.all([send('Page.enable'), send('Runtime.enable'), send('Network.enable')]);
 await send('Network.setCacheDisabled', { cacheDisabled: true });
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 await send('Page.navigate', { url });
+await fillCandidate();
+await new Promise((resolve) => setTimeout(resolve, 300));
+const candidateGateFrozen = await evaluate(`(()=>{const s=window.__trainingSim.state;return{distance:s.distance,elapsed:s.elapsed,commandAccepted:window.__trainingCommand('traction',0),gateVisible:!document.querySelector('#candidate-gate').hidden}})()`);
+assert.deepEqual(candidateGateFrozen, { distance: POWER_TRAINING_CONFIG.startDistance, elapsed: 0, commandAccepted: false, gateVisible: true });
+await submitCandidate();
 await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&document.querySelector('.sprite.traction')){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('完整驾驶台项目初始化超时'))}},100)})`, true);
 
-const nearbyMastDistances = await evaluate(`fetch(new URL('./assets/msts-neiyi-corridor/neiyi-lookout-full-scene.json',document.baseURI),{cache:'no-store'}).then((response)=>response.json()).then((data)=>data.instances.filter((instance)=>/^SweGantry1\\.s$/i.test(instance.shape||'')).map((instance)=>window.__routeScene.projectPointToPath(instance.position,6500)?.alongDistance).filter((distance)=>Number.isFinite(distance)&&distance>${n.noDoublePantograph - 100}&&distance<${n.noDoublePantograph + 100}).map((distance)=>Math.round(distance*10)/10).sort((a,b)=>a-b))`, true);
+const nearbyMastDistances = await evaluate(`fetch(new URL('./assets/msts-neiyi-corridor/power-training-scene.json?rev=candidate-load-v10',document.baseURI),{cache:'force-cache'}).then((response)=>response.json()).then((data)=>data.instances.filter((instance)=>/^SweGantry1\\.s$/i.test(instance.shape||'')).map((instance)=>window.__routeScene.projectPointToPath(instance.position,6500)?.alongDistance).filter((distance)=>Number.isFinite(distance)&&distance>${n.noDoublePantograph - 100}&&distance<${n.noDoublePantograph + 100}).map((distance)=>Math.round(distance*10)/10).sort((a,b)=>a-b))`, true);
 const firstMastAfterNoDouble = nearbyMastDistances.find((distance) => distance > n.noDoublePantograph);
 assert(firstMastAfterNoDouble - n.noDoublePantograph >= 3, '禁止双弓标必须位于邻近接触网支柱前方');
 
@@ -62,7 +76,13 @@ const summary = await evaluate(`(()=>{const names=[];let correctlyOrientedSource
   needles:document.querySelectorAll('.original-game-needle').length,
   lkj:Boolean(document.querySelector('.lkj-trigger')),cir:Boolean(document.querySelector('.cir-hotspot')),
   parking:Boolean(document.querySelector('.parking-apply')&&document.querySelector('.parking-release')),
+  candidateName:s.candidateAttempt?.name||'',candidateStudentId:s.candidateAttempt?.studentId||'',
+  candidateGateHidden:Boolean(document.querySelector('#candidate-gate')?.hidden),
   pathLength:window.__routeScene.pathLength,
+  terrainResolution:window.__routeScene.terrainRoot?.userData?.sourceResolution||0,
+  usesPowerSceneAsset:performance.getEntriesByType('resource').some((entry)=>entry.name.includes('power-training-scene.json')),
+  fetchedFullSceneAsset:performance.getEntriesByType('resource').some((entry)=>entry.name.includes('neiyi-lookout-full-scene.json')),
+  resourceReadyMs:Math.round(performance.getEntriesByName('power-training-resource-ready')[0]?.startTime||0),
   railLodSegments:names.filter((name)=>name.startsWith('MAINLINE_RAIL_VISIBILITY_')).length,
   railGlintBreakSegments:names.filter((name)=>/^LOOKOUT_RAIL_(?:LEFT|RIGHT)_GLINT_BREAK$/.test(name)).length,
   railVisibilityCoverage:(()=>{const root=window.__routeScene.routeRoot.getObjectByName('LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD');return(root?.children||[]).map((object)=>[object.userData.startDistance,object.userData.endDistance])})(),
@@ -103,7 +123,15 @@ assert(summary.needles >= 9);
 assert.equal(summary.lkj, true);
 assert.equal(summary.cir, true);
 assert.equal(summary.parking, true);
+assert.equal(summary.candidateName, '测试学员');
+assert.equal(summary.candidateStudentId, '20260001');
+assert.equal(summary.candidateGateHidden, true);
 assert(summary.pathLength > POWER_TRAINING_CONFIG.finishDistance);
+assert(summary.pathLength < 9500);
+assert.equal(summary.terrainResolution, 129);
+assert.equal(summary.usesPowerSceneAsset, true);
+assert.equal(summary.fetchedFullSceneAsset, false);
+assert(summary.resourceReadyMs > 0 && summary.resourceReadyMs < 12000);
 assert.equal(summary.railLodSegments, 2);
 assert.equal(summary.railGlintBreakSegments, 0);
 assert(summary.railVisibilityCoverage.every(([start,end])=>start===0&&end>=summary.pathLength-1));
@@ -187,6 +215,14 @@ await writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
 await send('Emulation.setDeviceMetricsOverride', { width: 1056, height: 480, deviceScaleFactor: 1, mobile: true, screenWidth: 1056, screenHeight: 480 });
 await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 await send('Page.navigate', { url: `${url}${url.includes('?') ? '&' : '?'}mobile-smoke=1` });
+await fillCandidate('手机端学员', 'MOBILE-2026');
+await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{const button=document.querySelector('#candidate-submit');if(button&&!button.disabled){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('手机端考核资源准备超时'))}},80)})`, true);
+const mobileCandidateLayout = await evaluate(`(()=>{const card=document.querySelector('.candidate-card').getBoundingClientRect();const submit=document.querySelector('#candidate-submit').getBoundingClientRect();return{overflowX:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,cardInside:card.left>=0&&card.right<=innerWidth+1,submitVisible:submit.top>=0&&submit.bottom<=innerHeight+1,gateVisible:!document.querySelector('#candidate-gate').hidden}})()`);
+assert.deepEqual(mobileCandidateLayout, { overflowX: false, cardInside: true, submitVisible: true, gateVisible: true });
+const mobileCandidateShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const mobileCandidateScreenshotPath = screenshotPath.replace(/\.png$/i, '-mobile-candidate.png');
+await writeFile(mobileCandidateScreenshotPath, Buffer.from(mobileCandidateShot.data, 'base64'));
+await submitCandidate();
 await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&document.body.classList.contains('mobile-controls-enabled')){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('手机横屏驾驶台初始化超时'))}},100)})`, true);
 await evaluate(`(()=>{const gate=document.querySelector('#landscape-gate');if(gate&&!gate.hidden)document.querySelector('#enter-training')?.click();const s=window.__trainingSim.state;s.running=false;s.distance=4500;window.__routeScene.update(s.distance,s.speed,'front',false,s.wholeTrainStartFraction);window.dispatchEvent(new Event('resize'));return true})()`);
 await new Promise((resolve) => setTimeout(resolve, 220));
@@ -215,6 +251,8 @@ assert(safetyBoundary.incidents.includes('early-breaker-close'));
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 await send('Emulation.setTouchEmulationEnabled', { enabled: false });
 await send('Page.navigate', { url });
+await fillCandidate('满分学员', 'FULL-2026');
+await submitCandidate();
 await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&window.__powerAssessment){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('满分流程复测初始化超时'))}},100)})`, true);
 const perfectAttempt = await evaluate(`(()=>{const s=window.__trainingSim.state;const a=window.__powerAssessment;const move=(distance)=>{s.distance=distance;a.update(s)};const callout=()=>a.recordAction('callout',true,s);
   move(${n.preview});callout();
@@ -234,9 +272,22 @@ const perfectAttempt = await evaluate(`(()=>{const s=window.__trainingSim.state;
 await new Promise((resolve) => setTimeout(resolve, 100));
 perfectAttempt.liveScore = await evaluate(`document.querySelector('#power-live-score').textContent`);
 perfectAttempt.completedRows = await evaluate(`document.querySelectorAll('#procedure li.done').length`);
-assert.deepEqual(perfectAttempt, { checks: 13, totalChecks: 13, invalidScenes: [], incidents: [], liveScore: '100/100分', completedRows: 13 });
+perfectAttempt.resultCandidate = await evaluate(`(()=>({name:document.querySelector('[data-result-name]')?.textContent,studentId:document.querySelector('[data-result-student-id]')?.textContent,score:document.querySelector('[data-result-score]')?.textContent,visible:document.querySelector('.result-modal')?.classList.contains('open'),changeCandidate:Boolean(document.querySelector('.result-change-candidate'))}))()`);
+assert.deepEqual(perfectAttempt, { checks: 13, totalChecks: 13, invalidScenes: [], incidents: [], liveScore: '100/100分', completedRows: 13, resultCandidate: { name: '满分学员', studentId: 'FULL-2026', score: '100', visible: true, changeCandidate: true } });
+const resultShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const resultScreenshotPath = screenshotPath.replace(/\.png$/i, '-result.png');
+await writeFile(resultScreenshotPath, Buffer.from(resultShot.data, 'base64'));
+await send('Emulation.setDeviceMetricsOverride', { width: 1056, height: 480, deviceScaleFactor: 1, mobile: true, screenWidth: 1056, screenHeight: 480 });
+await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+await evaluate(`document.body.classList.add('mobile-controls-enabled');document.documentElement.classList.add('immersive');window.dispatchEvent(new Event('resize'));true`);
+await new Promise((resolve) => setTimeout(resolve, 120));
+const mobileResultLayout = await evaluate(`(()=>{const shell=document.querySelector('.result-shell').getBoundingClientRect();const actions=document.querySelector('.result-actions').getBoundingClientRect();return{shellInside:shell.top>=0&&shell.bottom<=innerHeight+1,actionsVisible:actions.top>=0&&actions.bottom<=innerHeight+1,overflowX:document.documentElement.scrollWidth>document.documentElement.clientWidth+1}})()`);
+assert.deepEqual(mobileResultLayout, { shellInside: true, actionsVisible: true, overflowX: false });
+const mobileResultShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const mobileResultScreenshotPath = screenshotPath.replace(/\.png$/i, '-mobile-result.png');
+await writeFile(mobileResultScreenshotPath, Buffer.from(mobileResultShot.data, 'base64'));
 
 assert.deepEqual(errors, []);
 assert.deepEqual(networkErrors, []);
 socket.close();
-console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, signSequence, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath, signScreenshotPath, railScreenshotPath, orderScreenshotPath, mobileRailScreenshotPath }, null, 2));
+console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, signSequence, docked, maintained, threePosition, mobileCandidateLayout, mobileLayout, safetyBoundary, perfectAttempt, mobileResultLayout, screenshotPath, switchScreenshotPath, signScreenshotPath, railScreenshotPath, orderScreenshotPath, mobileCandidateScreenshotPath, mobileRailScreenshotPath, resultScreenshotPath, mobileResultScreenshotPath }, null, 2));

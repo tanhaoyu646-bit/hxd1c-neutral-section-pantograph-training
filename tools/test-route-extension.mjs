@@ -40,13 +40,12 @@ assert.match(
   '走廊型项目的连续本务主线不得在考核终点附近截断',
 );
 assert.match(routeSceneSource, /LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD/, '缺少主线远景钢轨可见LOD');
-assert.match(routeSceneSource, /onePixelDistance = 0\.15 \* viewportHeight/, '远景LOD必须按视口像素密度动态接管');
-assert.match(routeSceneSource, /nearFadeStart = THREE\.MathUtils\.clamp\(onePixelDistance \* 0\.65, 40, 90\)/, '远景LOD缺少已验收的动态渐入起点');
-assert.match(routeSceneSource, /this\.camera\.far = Math\.max\(50_000, Math\.ceil\(this\.pathLength \+ 1_000\)\)/, '相机远裁剪面未覆盖完整本务线路');
+assert.match(routeSceneSource, /new THREE\.LineBasicMaterial\(\{[\s\S]*?color: '#a9b2b5'/, '远景钢轨必须采用原生一像素银灰连续线');
+assert.match(routeSceneSource, /native one-pixel metal continuity line over complete 3D rail heads/, '远景LOD未标记为原生一像素连续线');
+assert.doesNotMatch(routeSceneSource, /halfWidthPixels/, '远景钢轨不得恢复会在手机端形成鼓包的屏幕空间加宽带');
+assert.match(routeSceneSource, /this\.isPowerTraining[\s\S]*?Math\.max\(10_000, Math\.ceil\(this\.pathLength \+ 1_000\)\)[\s\S]*?Math\.max\(50_000, Math\.ceil\(this\.pathLength \+ 1_000\)\)/, '相机远裁剪面未分别覆盖训练走廊与完整本务线路');
 assert.doesNotMatch(routeSceneSource, /uniform float fogFar/, '远景钢轨不得再按场景雾距淡出');
-assert.match(routeSceneSource, /id: 'TOP', halfWidthPixels: 0\.62, color: '#8b969a'/, '远景钢轨必须使用与实体轨头一致的原线路中灰钢色');
-assert.match(routeSceneSource, /id: 'SIDE', halfWidthPixels: 1\.15/, '远景钢轨缺少暗轨腰轮廓层');
-assert.match(routeSceneSource, /id: 'TOP', halfWidthPixels: 0\.62/, '远景钢轨缺少灰钢轨顶层');
+assert.match(routeSceneSource, /material\.name = 'LOOKOUT_DISTANT_RAIL_METAL_LINE_MATERIAL'/, '远景钢轨缺少可审计的材质标记');
 assert.match(routeSceneSource, /texture: 'ACleanTrack2\.png'/, '实体钢轨未恢复原游戏轨道纹理');
 assert.match(routeSceneSource, /polishedMaterial\.emissive\.set\('#000000'\)/, '实体轨头不得使用白色或蓝色自发光');
 
