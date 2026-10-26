@@ -1,4 +1,4 @@
-import { POWER_SCORING, POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=rail-sign-order-v8';
+import { POWER_SCORING, POWER_TRAINING_CONFIG } from './powerTrainingConfig.js?rev=mobile-rail-v9';
 
 const { neutral: N, pantograph: P } = POWER_TRAINING_CONFIG;
 const ALL_SCORING_ITEMS = [...POWER_SCORING.neutral, ...POWER_SCORING.pantograph];

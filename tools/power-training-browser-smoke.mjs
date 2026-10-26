@@ -66,9 +66,14 @@ const summary = await evaluate(`(()=>{const names=[];let correctlyOrientedSource
   railLodSegments:names.filter((name)=>name.startsWith('MAINLINE_RAIL_VISIBILITY_')).length,
   railGlintBreakSegments:names.filter((name)=>/^LOOKOUT_RAIL_(?:LEFT|RIGHT)_GLINT_BREAK$/.test(name)).length,
   railVisibilityCoverage:(()=>{const root=window.__routeScene.routeRoot.getObjectByName('LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD');return(root?.children||[]).map((object)=>[object.userData.startDistance,object.userData.endDistance])})(),
-  railTopLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_TOP_MATERIAL'),
-  railSideLayer:window.__routeScene.railVisibilityMaterials.some((material)=>material.name==='LOOKOUT_DISTANT_RAIL_SIDE_MATERIAL'),
-  railFadeRanges:window.__routeScene.railVisibilityMaterials.map((material)=>[material.uniforms.nearFadeStart.value,material.uniforms.nearFadeEnd.value]),
+  railVisibilityAllNativeLines:(()=>{const root=window.__routeScene.routeRoot.getObjectByName('LOOKOUT_MAINLINE_RAIL_VISIBILITY_LOD');return(root?.children||[]).every((object)=>object.isLine)})(),
+  railVisibilityUsesScreenSpaceWidening:names.some((name)=>/^MAINLINE_RAIL_VISIBILITY_(?:SIDE|TOP)_/.test(name)),
+  distantRailColor:window.__routeScene.railVisibilityMaterials[0]?.color?.getHexString()||'',
+  distantRailOpacity:window.__routeScene.railVisibilityMaterials[0]?.opacity||0,
+  polishedRailColor:window.__routeScene.routeRoot.getObjectByName('LOOKOUT_RAIL_LEFT_POLISHED_BEFORE')?.material?.color?.getHexString()||'',
+  polishedRailMetalness:window.__routeScene.routeRoot.getObjectByName('LOOKOUT_RAIL_LEFT_POLISHED_BEFORE')?.material?.metalness??-1,
+  polishedRailRoughness:window.__routeScene.routeRoot.getObjectByName('LOOKOUT_RAIL_LEFT_POLISHED_BEFORE')?.material?.roughness??-1,
+  railBodyColor:window.__routeScene.routeRoot.getObjectByName('LOOKOUT_RAIL_LEFT_BODY')?.material?.color?.getHexString()||'',
   powerSigns:names.filter((name)=>name.startsWith('POWER_SIGN_')).length,
   sourceSignRoots:names.filter((name)=>name.startsWith('POWER_SIGN_')&&name.endsWith('_FRONT')).length,
   correctlyOrientedSourceSigns,
@@ -99,12 +104,17 @@ assert.equal(summary.lkj, true);
 assert.equal(summary.cir, true);
 assert.equal(summary.parking, true);
 assert(summary.pathLength > POWER_TRAINING_CONFIG.finishDistance);
-assert.equal(summary.railLodSegments, 4);
+assert.equal(summary.railLodSegments, 2);
 assert.equal(summary.railGlintBreakSegments, 0);
 assert(summary.railVisibilityCoverage.every(([start,end])=>start===0&&end>=summary.pathLength-1));
-assert.equal(summary.railTopLayer, true);
-assert.equal(summary.railSideLayer, true);
-assert(summary.railFadeRanges.every(([start,end])=>start>=40&&start<=90&&end>=110&&end<=180));
+assert.equal(summary.railVisibilityAllNativeLines, true);
+assert.equal(summary.railVisibilityUsesScreenSpaceWidening, false);
+assert.equal(summary.polishedRailColor, 'a9b2b5');
+assert(summary.polishedRailMetalness >= 0.35 && summary.polishedRailMetalness <= 0.5);
+assert(summary.polishedRailRoughness >= 0.24 && summary.polishedRailRoughness <= 0.34);
+assert.equal(summary.railBodyColor, '737c80');
+assert.equal(summary.distantRailColor, summary.polishedRailColor);
+assert(summary.distantRailOpacity >= 0.8 && summary.distantRailOpacity <= 0.9);
 assert.equal(summary.powerSigns, 20);
 assert.equal(summary.sourceSignRoots, 6);
 assert.equal(summary.correctlyOrientedSourceSigns, 6);
@@ -174,9 +184,16 @@ await evaluate(`document.querySelector('.cir-modal .device-close').click();true`
 const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
 await writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
 
-await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: true, screenWidth: 844, screenHeight: 390 });
+await send('Emulation.setDeviceMetricsOverride', { width: 1056, height: 480, deviceScaleFactor: 1, mobile: true, screenWidth: 1056, screenHeight: 480 });
 await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-await evaluate(`window.dispatchEvent(new Event('resize'));document.querySelector('.switch-panel-trigger').click();true`);
+await send('Page.navigate', { url: `${url}${url.includes('?') ? '&' : '?'}mobile-smoke=1` });
+await evaluate(`new Promise((resolve,reject)=>{const start=Date.now();const timer=setInterval(()=>{if(window.__routeScene?.powerRoot&&document.querySelector('#route-scene.live')&&document.body.classList.contains('mobile-controls-enabled')){clearInterval(timer);resolve(true)}else if(Date.now()-start>35000){clearInterval(timer);reject(new Error('手机横屏驾驶台初始化超时'))}},100)})`, true);
+await evaluate(`(()=>{const gate=document.querySelector('#landscape-gate');if(gate&&!gate.hidden)document.querySelector('#enter-training')?.click();const s=window.__trainingSim.state;s.running=false;s.distance=4500;window.__routeScene.update(s.distance,s.speed,'front',false,s.wholeTrainStartFraction);window.dispatchEvent(new Event('resize'));return true})()`);
+await new Promise((resolve) => setTimeout(resolve, 220));
+const mobileRailShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+const mobileRailScreenshotPath = screenshotPath.replace(/\.png$/i, '-mobile-rail.png');
+await writeFile(mobileRailScreenshotPath, Buffer.from(mobileRailShot.data, 'base64'));
+await evaluate(`document.querySelector('.switch-panel-trigger').click();true`);
 await new Promise((resolve) => setTimeout(resolve, 160));
 const mobileLayout = await evaluate(`(()=>{const stage=document.querySelector('#stage').getBoundingClientRect();const panel=document.querySelector('.power-switch-docked .switch-panel-shell').getBoundingClientRect();return{overflowX:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,panelInside:panel.left>=stage.left&&panel.right<=stage.right+1,upperViewClear:panel.top>=stage.top+stage.height*.4}})()`);
 assert.deepEqual(mobileLayout, { overflowX: false, panelInside: true, upperViewClear: true });
@@ -222,4 +239,4 @@ assert.deepEqual(perfectAttempt, { checks: 13, totalChecks: 13, invalidScenes: [
 assert.deepEqual(errors, []);
 assert.deepEqual(networkErrors, []);
 socket.close();
-console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, signSequence, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath, signScreenshotPath, railScreenshotPath, orderScreenshotPath }, null, 2));
+console.log(JSON.stringify({ summary, nearbyMastDistances, firstMastAfterNoDouble, signSequence, docked, maintained, threePosition, mobileLayout, safetyBoundary, perfectAttempt, screenshotPath, switchScreenshotPath, signScreenshotPath, railScreenshotPath, orderScreenshotPath, mobileRailScreenshotPath }, null, 2));
